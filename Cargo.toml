@@ -1,9 +1,16 @@
 [package]
-name = "untitled"
+name = "multiup_client"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = "0.11.16"
+eframe = { version = "0.21.3", features = ["persistence"]}
+pollster = "0.3.0"
+reqwest = { version = "0.11.16", features = ["json", "multipart", "stream"] }
+scraper = "0.16.0"
+serde = { version = "1.0.160", features = ["derive"]}
+serde_json = "1.0.96"
+tokio = { version = "1.27.0", features = ["full"] }
+tokio-util = "0.7.7"
