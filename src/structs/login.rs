@@ -3,6 +3,7 @@ use eframe::egui::{self, Context};
 use pollster::FutureExt;
 use serde::{Deserialize, Serialize};
 use std::mem;
+use eframe::egui::accesskit::Role::Log;
 use egui::widgets::text_edit::TextEdit;
 use tokio::runtime::Runtime;
 
@@ -67,11 +68,23 @@ impl Login {
     }
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct LoginData {
     pub error: String,
     pub login: String,
     pub user: u64,
     pub account_type: String,
     pub premium_days_left: String,
+}
+
+impl Default for LoginData {
+    fn default() -> Self {
+        LoginData {
+            error: String::new(),
+            login: "Not logged in".to_string(),
+            user: 0,
+            account_type: String::new(),
+            premium_days_left: String::new(),
+        }
+    }
 }

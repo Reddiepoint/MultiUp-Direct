@@ -1,5 +1,5 @@
 use std::fs::File;
-use eframe::egui::Context;
+use eframe::egui::{Context, Ui};
 use serde::Deserialize;
 
 #[derive(Default)]
@@ -8,8 +8,8 @@ pub struct Upload {
 }
 
 impl Upload {
-    pub fn show(ctx: &Context) {
-
+    pub fn show(ctx: &Context, ui: &mut Ui) {
+        ui.label("Nothing here yet :)");
     }
 }
 
