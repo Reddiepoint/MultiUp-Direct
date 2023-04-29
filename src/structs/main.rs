@@ -1,13 +1,6 @@
+use eframe::egui::{self, CentralPanel};
 
-use eframe::egui;
-use eframe::egui::{CentralPanel};
-
-
-
-use crate::structs::download::Download;
-use crate::structs::login::LoginData;
-use crate::structs::settings::Settings;
-use crate::structs::upload::Upload;
+use crate::structs::{download::Download, login::LoginData, settings::Settings, upload::Upload};
 
 #[derive(Default)]
 pub struct Application {
@@ -32,11 +25,14 @@ impl eframe::App for Application {
         // Tabs
         egui::TopBottomPanel::top("Tab Bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                for (panel, label) in [(Panel::Download, "Download"), (Panel::Upload, "Upload"), (Panel::Settings, "Settings")] {
+                for (panel, label) in [
+                    (Panel::Download, "Download"),
+                    (Panel::Upload, "Upload"),
+                    (Panel::Settings, "Settings"),
+                ] {
                     ui.selectable_value(&mut self.panel, panel, label);
                 }
             });
-
         });
 
         egui::TopBottomPanel::bottom("Statuses").show(ctx, |ui| {
@@ -45,12 +41,10 @@ impl eframe::App for Application {
             });
         });
 
-        CentralPanel::default().show(ctx, |ui| {
-            match &self.panel {
-                Panel::Download => Download::show(ui, &mut self.download),
-                Panel::Upload => Upload::show(ctx, ui),
-                Panel::Settings => Settings::show(ctx, ui)
-            }
+        CentralPanel::default().show(ctx, |ui| match &self.panel {
+            Panel::Download => Download::show(ui, &mut self.download),
+            Panel::Upload => Upload::show(ctx, ui),
+            Panel::Settings => Settings::show(ctx, ui),
         });
     }
 }
