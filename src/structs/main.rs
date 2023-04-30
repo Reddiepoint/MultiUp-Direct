@@ -1,6 +1,7 @@
-use eframe::egui::{self, CentralPanel};
+use eframe::egui::{self, CentralPanel, menu};
 
 use crate::structs::{download::Download, login::LoginData, settings::Settings, upload::Upload};
+use crate::structs::help::Help;
 
 #[derive(Default)]
 pub struct Application {
@@ -8,6 +9,7 @@ pub struct Application {
     panel: Panel,
     download: Download,
     upload: Upload,
+    show_help: bool,
 }
 
 #[derive(Default, PartialEq)]
@@ -31,7 +33,17 @@ impl eframe::App for Application {
                     (Panel::Settings, "Settings"),
                 ] {
                     ui.selectable_value(&mut self.panel, panel, label);
-                }
+                };
+                menu::bar(ui, |ui| {
+                    ui.menu_button("Help", |ui| {
+                        if ui.button("Show help").clicked() {
+                            self.show_help = true;
+                            ui.close_menu();
+                        };
+                    });
+                });
+
+
             });
         });
 
@@ -41,10 +53,18 @@ impl eframe::App for Application {
             });
         });
 
-        CentralPanel::default().show(ctx, |ui| match &self.panel {
-            Panel::Download => Download::show(ui, &mut self.download),
-            Panel::Upload => Upload::show(ctx, ui),
-            Panel::Settings => Settings::show(ctx, ui),
+        CentralPanel::default().show(ctx, |ui| {
+            match &self.panel {
+                Panel::Download => Download::show(ui, &mut self.download),
+                Panel::Upload => Upload::show(ctx, ui),
+                Panel::Settings => Settings::show(ctx, ui),
+            };
+
+            if self.show_help {
+                Help::show(ctx, &mut self.show_help);
+            }
         });
+
+
     }
 }

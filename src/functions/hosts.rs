@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
-use crate::functions::login::login;
+
 use crate::structs::hosts::{AvailableHostsResponse, LinkValidityResponse, Url};
 
 pub async fn check_validity(url: &str) -> HashMap<String, Option<String>>{

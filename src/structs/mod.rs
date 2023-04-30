@@ -6,3 +6,4 @@ pub mod download;
 pub mod hosts;
 pub mod filter;
 pub mod settings;
+pub mod help;

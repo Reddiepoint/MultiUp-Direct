@@ -1,97 +1,91 @@
+use std::collections::HashSet;
 use std::sync::mpsc;
-use eframe::egui::{ScrollArea, TextEdit, Ui};
-use tokio::runtime::Runtime;
-use crate::functions::filter::get_links_hosts;
+use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
-use crate::structs::download::Download;
 use crate::structs::hosts::Link;
 
 
-pub async fn generate_direct_links(links: &str, check_status: &bool, filter: &Vec<(String, bool)>) -> (Vec<Link>, Vec<(String, bool)>) {
-	let links = fix_mirror_links(&links); // All links are ok
+pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link>, Vec<(String, bool)>) {
+    let links = fix_mirror_links(links); // All links are ok
 
-	let direct_links = scrape_links(&links, check_status).await;
-	println!("{:?}", direct_links);
-	let links_hosts = get_links_hosts(&direct_links);
-	(direct_links, links_hosts)
+    let (tx, rx) = mpsc::channel();
+    for link in links {
+        let tx = tx.clone();
+        let temp_link = link.clone();
+        tokio::spawn(async move {
+            let generated_links = scrape_link(&temp_link, check_status).await;
+            tx.send(generated_links).unwrap();
+        });
+    }
+    drop(tx);
+    let mut direct_links: Vec<Link> = vec![];
+    for received_links in rx {
+        direct_links.extend(received_links);
+    }
+
+    let filter_hosts = set_filter_hosts(&direct_links);
+    (direct_links, filter_hosts)
 }
 
-
+/// Convert short and long links to the en/mirror page. Removes duplicates,
 pub fn fix_mirror_links(url: &str) -> Vec<String> {
-	let re = regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap();
-	url
-		.split('\n')
-		.map(|link| {
-			let mut link = link.trim().split(' ').next().unwrap();
-			let fixed_link = if (link.starts_with("https://multiup.org/") || link.starts_with("https://multiup.org/download/")) && !link.starts_with("https://multiup.org/en/mirror/") {
-				let mut fixed_link = link.replace("https://multiup.org/", "https://multiup.org/en/mirror/").replace("download/", "");
-				if !re.is_match(&fixed_link) {
-					fixed_link += "/a";
-					fixed_link
-				} else {
-					fixed_link
-				}
-			} else {
-				link.to_string()
-			};
+    let re = regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap();
+    let mut links = HashSet::new();
+    url.split('\n')
+        .map(|link| {
+            let link = link.trim().split(' ').next().unwrap();
+            let fixed_link = if !link.starts_with("https://multiup.org/en/mirror/") && link.starts_with("https://multiup.org/") {
+                let mut fixed_link = link.replace("https://multiup.org/", "https://multiup.org/en/mirror/").replace("download/", "");
+                if !re.is_match(&fixed_link) {
+                    fixed_link += "/a";
+                };
+                fixed_link
+            } else {
+                link.to_string()
+            };
 
-			if !re.is_match(&fixed_link) {
-				String::new()
-			} else {
-				fixed_link
-			}
-		})
-		.filter(|link| !link.is_empty())
-		.collect::<Vec<String>>()
+            if !re.is_match(&fixed_link) {
+                String::new()
+            } else {
+                fixed_link
+            }
+        })
+        .filter(|link| !link.is_empty())
+        .for_each(|link| { links.insert(link); });
+    links.into_iter().collect()
 }
 
-async fn scrape_links(mirror_links: &[String], check_status: &bool) -> Vec<Link> {
-	let mut direct_links = vec![];
-	for link in mirror_links {
-		let mut link_hosts = scrape_link_hosts(link).await;
-		if link_hosts.is_empty() {
-			direct_links.push(Link::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string()));
-		} else if *check_status {
-			let rt = Runtime::new().expect("Unable to create runtime");
-			let temp_link = link.clone();
-			let (tx, rx) = mpsc::sync_channel(0);
-			std::thread::spawn(move || {
-				let hosts = rt.block_on(async { check_validity(&temp_link).await });
-				tx.send(hosts)
-			});
-			let hosts = rx.recv().unwrap();
-			link_hosts = link_hosts
-				.into_iter()
-				.map(|direct_link| {
-					if let Some(status) = hosts.get(&direct_link.name_host) {
-						match status {
-							Some(status) => Link::new(direct_link.name_host, direct_link.url, status.to_string()),
-							None => Link::new(direct_link.name_host, direct_link.url, String::new()),
-						}
-					} else {
-						direct_link
-					}
-				})
-				.collect();
-		}
-		direct_links.append(&mut link_hosts);
-	}
-	direct_links
+async fn scrape_link(mirror_link: &str, check_status: bool) -> Vec<Link> {
+    let link_hosts = scrape_link_for_hosts(mirror_link).await;
+    if link_hosts.is_empty() {
+        vec![Link::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]
+    } else if check_status {
+        let hosts = check_validity(mirror_link).await;
+        link_hosts.into_iter().map(|link| {
+            let status = match hosts.get(&link.name_host).unwrap() {
+                Some(validity) => validity,
+                None => "unknown"
+            };
+            Link::new(link.name_host, link.url, status.to_string())
+        }).collect()
+    } else {
+        link_hosts
+    }
 }
 
-async fn scrape_link_hosts(url: &str) -> Vec<Link> {
-	// Regular links
-	let mut links: Vec<Link> = vec![];
-	// Scrape panel
-	let website_html = reqwest::get(url).await.unwrap().text().await.unwrap();
-	let website_html = scraper::Html::parse_document(&website_html);
-	let button_selector = scraper::Selector::parse(r#"button[type="submit"]"#).unwrap();
-	for element in website_html.select(&button_selector) {
-		let name_host = element.value().attr("namehost").unwrap();
-		let link = element.value().attr("link").unwrap();
-		let validity = element.value().attr("validity").unwrap();
-		links.push(Link::new(name_host.to_string(), link.to_string(), validity.to_string()))
-	};
+async fn scrape_link_for_hosts(url: &str) -> Vec<Link> {
+    // Regular links
+    let mut links: Vec<Link> = vec![];
+    // Scrape panel
+    let website_html = reqwest::get(url).await.unwrap().text().await.unwrap();
+    let website_html = scraper::Html::parse_document(&website_html);
+    let button_selector = scraper::Selector::parse(r#"button[type="submit"]"#).unwrap();
+    for element in website_html.select(&button_selector) {
+        let name_host = element.value().attr("namehost").unwrap();
+        let link = element.value().attr("link").unwrap();
+        let validity = element.value().attr("validity").unwrap();
+        links.push(Link::new(name_host.to_string(), link.to_string(), validity.to_string()))
+    };
 
-	links // Will be empty if invalid page
+    links // Will be empty if invalid page
 }

@@ -16,7 +16,7 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     eframe::run_native(
-        "My MultiUp Client",
+        "MultiUp Direct",
         options,
         Box::new(|_cc| Box::<Application>::default()),
     )

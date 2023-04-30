@@ -1,4 +1,4 @@
-use eframe::egui::Ui;
+
 use crate::structs::login::{Login, LoginData};
 
 pub async fn login(login: Login) -> Result<LoginData, String> {

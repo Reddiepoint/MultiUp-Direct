@@ -1,37 +1,36 @@
-use std::collections::HashMap;
-use eframe::egui::{Context, ScrollArea, Separator, Ui};
-use serde_json::to_string;
-use crate::functions::hosts::get_available_hosts;
-use crate::structs::download::Download;
-use crate::structs::hosts::Link;
+use eframe::egui::ScrollArea;
+use eframe::egui::Ui;
 
 
-pub struct FilterLinksCriteria {
+pub struct FilterMenu {
     pub valid: bool,
     pub invalid: bool,
     pub unknown: bool,
+    pub unchecked: bool,
     pub hosts: Vec<(String, bool)>
 }
 
-impl Default for FilterLinksCriteria {
+impl Default for FilterMenu {
     fn default() -> Self {
-        FilterLinksCriteria {
+        FilterMenu {
             valid: true,
             invalid: false,
             unknown: false,
+            unchecked: false,
             hosts: vec![]
         }
     }
 }
 
-impl FilterLinksCriteria {
-    pub fn show(ui: &mut Ui, filter: &mut FilterLinksCriteria) {
+impl FilterMenu {
+    pub fn show(ui: &mut Ui, filter: &mut FilterMenu) {
         ui.vertical(|ui| {
             ui.set_max_width(150.0);
             ui.label("Host status: ");
             ui.checkbox(&mut filter.valid, "Valid");
             ui.checkbox(&mut filter.invalid, "Invalid");
             ui.checkbox(&mut filter.unknown, "Unknown");
+            ui.checkbox(&mut filter.unchecked, "Unchecked");
             ui.separator();
             ui.label("Show hosts: ");
             if ui.button("Select all").clicked() {
