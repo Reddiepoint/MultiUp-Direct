@@ -21,7 +21,9 @@ pub struct Download {
     pub direct_links: Vec<Link>,
     pub links_to_display: Vec<String>,
     pub filter: FilterMenu,
-    pub selected_links: Vec<String>
+    pub selected_links: Vec<String>,
+    pub index_1: usize,
+    pub index_2: usize,
 }
 
 impl Default for Download {
@@ -33,6 +35,8 @@ impl Default for Download {
             links_to_display: vec![],
             filter: FilterMenu::default(),
             selected_links: vec![],
+            index_1: 0,
+            index_2: 0,
         }
     }
 }
@@ -105,6 +109,11 @@ impl Download {
                         ui.set_width(ui.available_width() - 200.0);
                         ui.vertical(|ui| {
                             let mut selected_links: HashSet<&str> = self.selected_links.iter().map(|url| url.as_str()).collect();
+                            for link in self.selected_links.iter() {
+                                if !self.links_to_display.contains(link) {
+                                    selected_links.remove(link.as_str());
+                                };
+                            };
                             for link in self.links_to_display.iter() {
                                 let output = ui.add(Label::new(link).sense(Sense::click()));
                                 if output.hovered() || self.selected_links.contains(link) {
@@ -115,27 +124,85 @@ impl Download {
                                     ui.modifiers.ctrl
                                 });
 
+                                let shift_down = ui.ctx().input(|ui| {
+                                    ui.modifiers.shift
+                                });
+
                                 if output.clicked() && control_down {
                                     if selected_links.contains(link.as_str()) {
                                         selected_links.remove(link.as_str());
                                     } else {
                                         selected_links.insert(link);
                                     }
-                                }
+                                } else if output.clicked() && shift_down {
+                                    if self.index_1 == 0 {
+                                        self.index_1 = self.links_to_display.iter().position(|url| url == link).unwrap() + 1;
+                                        self.index_2 = self.links_to_display.iter().position(|url| url == link).unwrap() + 1;
+                                    } else {
+                                        self.index_2 = self.links_to_display.iter().position(|url| url == link).unwrap() + 1;
+                                    };
+                                } else if output.clicked() {
+                                    self.index_1 = self.links_to_display.iter().position(|url| url == link).unwrap() + 1;
+                                    self.index_2 = self.links_to_display.iter().position(|url| url == link).unwrap() + 1;
+                                };
+
+                                let slice = &self.links_to_display;
+                                let index_1 = self.index_1;
+                                let index_2 = self.index_2;
+                                if self.index_1 > self.index_2 {
+                                    self.index_1 = index_2;
+                                    self.index_2 = index_1;
+                                };
+
+                                if self.index_1 != 0 && self.index_1 != self.index_2 {
+                                    slice[self.index_1-1..self.index_2].iter().for_each(|link| { selected_links.insert(link); });
+                                    if ui.ctx().input(|ui| {
+                                        !ui.modifiers.shift
+                                    }) {
+                                        self.index_1 = 0;
+                                    };
+
+
+                                    //self.index_2 = 0;
+                                };
 
                                 output.context_menu(|ui| {
                                     if ui.button("Copy link").clicked() {
                                         ui.output_mut(|output| output.copied_text = link.to_string());
                                         ui.close_menu();
-                                    } else if !self.selected_links.is_empty() {
-                                        if ui.button("Copy selected links").clicked() {
-                                            ui.output_mut(|output| output.copied_text = self.selected_links.join("\n"));
-                                            ui.close_menu();
-                                        }
-                                    }
-                                    else if ui.button("Copy links").clicked() {
+                                    };
+                                    if !self.selected_links.is_empty() && ui.button("Copy selected links").clicked() {
+                                        ui.output_mut(|output| output.copied_text = self.selected_links.join("\n"));
+                                        ui.close_menu();
+                                    };
+                                    if ui.button("Copy all links").clicked() {
                                         ui.output_mut(|output| output.copied_text = self.links_to_display.join("\n"));
                                         ui.close_menu();
+                                    };
+                                    ui.separator();
+                                    if ui.button("Open link in browser").clicked() {
+                                        let _ = webbrowser::open(link);
+                                        ui.close_menu();
+                                    };
+                                    if !self.selected_links.is_empty() && ui.button("Open selected links in browser").clicked() {
+                                        for link in self.selected_links.iter() {
+                                            let _ = webbrowser::open(link);
+                                        }
+                                        ui.close_menu();
+                                    };
+                                    if ui.button("Open all links in browser").clicked() {
+                                        for link in self.links_to_display.iter() {
+                                            let _ = webbrowser::open(link);
+                                        }
+                                        ui.close_menu();
+                                    };
+
+                                    if !self.selected_links.is_empty() {
+                                        ui.separator();
+                                        if ui.button("Deselect all links").clicked() {
+                                            selected_links = HashSet::new();
+                                            ui.close_menu();
+                                        }
                                     }
                                 });
                             };

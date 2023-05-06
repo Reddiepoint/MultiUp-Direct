@@ -58,7 +58,7 @@ impl FilterMenu {
                     let checkbox = ui.checkbox(&mut host.1, host_name);
                     checkbox.context_menu(|ui| {
                         if ui
-                            .button(format!("select {} links only", host_name))
+                            .button(format!("Select {} links only", host_name))
                             .clicked()
                         {
                             for host in filter.hosts.iter_mut() {
