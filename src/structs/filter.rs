@@ -52,13 +52,25 @@ impl FilterMenu {
             ui.separator();
 
             ScrollArea::vertical().id_source("Host Filter").min_scrolled_height(ui.available_height()).show(ui, |ui| {
-                let mut new_filter = filter.clone();
-                for orig_host in filter.hosts.iter_mut() {
-                    let host_name = &orig_host.0.clone();
-
-                    let checkbox = ui.checkbox(&mut orig_host.1, host_name);
-
-
+                for i in 0..filter.hosts.len() {
+                    let host = &mut filter.hosts[i];
+                    let host_name = &host.0.clone();
+                    let checkbox = ui.checkbox(&mut host.1, host_name);
+                    checkbox.context_menu(|ui| {
+                        if ui
+                            .button(format!("select {} links only", host_name))
+                            .clicked()
+                        {
+                            for host in filter.hosts.iter_mut() {
+                                if &host.0 == host_name {
+                                    host.1 = true;
+                                } else {
+                                    host.1 = false;
+                                };
+                            };
+                            ui.close_menu();
+                        }
+                    });
                 }
             });
         });
