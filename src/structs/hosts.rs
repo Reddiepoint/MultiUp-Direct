@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Link {
     pub name_host: String,
     pub url: String,

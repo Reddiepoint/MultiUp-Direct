@@ -1,20 +1,27 @@
-use std::sync::mpsc;
+use std::collections::HashSet;
+use std::sync::{Arc, mpsc, Mutex, MutexGuard};
+use std::sync::mpsc::{RecvError, SendError, TryRecvError};
+use std::time::Duration;
 
-use eframe::egui::{ScrollArea, TextEdit, Ui};
+use eframe::egui::{Label, ScrollArea, Sense, TextBuffer, TextEdit, Ui};
 use pollster::FutureExt;
 use tokio::runtime::Runtime;
+
 
 use crate::functions::download::generate_direct_links;
 use crate::functions::filter::filter_links;
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::Link;
 
+
+#[derive(Clone)]
 pub struct Download {
     pub mirror_links_input: String,
     pub check_status: bool,
     pub direct_links: Vec<Link>,
-    pub links_to_display: String,
+    pub links_to_display: Vec<String>,
     pub filter: FilterMenu,
+    pub selected_links: Vec<String>
 }
 
 impl Default for Download {
@@ -23,8 +30,9 @@ impl Default for Download {
             mirror_links_input: String::new(),
             check_status: true,
             direct_links: vec![],
-            links_to_display: String::new(),
+            links_to_display: vec![],
             filter: FilterMenu::default(),
+            selected_links: vec![],
         }
     }
 }
@@ -49,27 +57,36 @@ impl Download {
             // Check status
             ui.checkbox(
                 &mut self.check_status,
-                "Check host status",
+                "Re-check host status",
             );
+
             // Generate links
             if ui.button("Generate links").clicked() {
-                // Create runtime
                 let rt = Runtime::new().expect("Unable to create runtime");
                 let _ = rt.enter();
-                let (tx, rx) = mpsc::sync_channel(1);
+                let (tx, rx) = std::sync::mpsc::sync_channel(0);
+                // Create runtime
                 let mirror_links = self.mirror_links_input.clone();
                 let check_status = self.check_status;
+
                 std::thread::spawn(move || {
-                    let generated_links = rt.block_on(async {
+                    let result = rt.block_on(async {
                         generate_direct_links(&mirror_links, check_status).await
                     });
-                    tx.send(generated_links)
+
+                    match tx.send(result) {
+                        Ok(_) => {}
+                        Err(error) => {println!("Error: {}", error)}
+                    };
+
                 });
 
-                let (generated_links, links_hosts) = rx.recv().unwrap();
+                let (generated_links, links_host) = rx.recv().unwrap();
                 self.direct_links = generated_links;
-                self.filter.hosts = links_hosts;
+                self.filter.hosts = links_host;
             };
+
+
         });
     }
 
@@ -83,16 +100,46 @@ impl Download {
                 ui.label("Direct links: ");
                 ScrollArea::vertical()
                     .min_scrolled_height(ui.available_height())
+                    .id_source("Display links")
                     .show(ui, |ui| {
-                        let output = ui.add(
-                            TextEdit::multiline(&mut self.links_to_display)
-                                .desired_width(ui.available_width() - 200.0),
-                        );
-                        output.context_menu(|ui| {
-                            if ui.button("Copy links").clicked() {
-                                ui.output_mut(|output| output.copied_text = self.links_to_display.clone());
-                                ui.close_menu();
-                            }
+                        ui.set_width(ui.available_width() - 200.0);
+                        ui.vertical(|ui| {
+                            let mut selected_links: HashSet<&str> = self.selected_links.iter().map(|url| url.as_str()).collect();
+                            for link in self.links_to_display.iter() {
+                                let output = ui.add(Label::new(link).sense(Sense::click()));
+                                if output.hovered() || self.selected_links.contains(link) {
+                                    output.clone().highlight();
+                                };
+
+                                let control_down = ui.ctx().input(|ui| {
+                                    ui.modifiers.ctrl
+                                });
+
+                                if output.clicked() && control_down {
+                                    if selected_links.contains(link.as_str()) {
+                                        selected_links.remove(link.as_str());
+                                    } else {
+                                        selected_links.insert(link);
+                                    }
+                                }
+
+                                output.context_menu(|ui| {
+                                    if ui.button("Copy link").clicked() {
+                                        ui.output_mut(|output| output.copied_text = link.to_string());
+                                        ui.close_menu();
+                                    } else if !self.selected_links.is_empty() {
+                                        if ui.button("Copy selected links").clicked() {
+                                            ui.output_mut(|output| output.copied_text = self.selected_links.join("\n"));
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    else if ui.button("Copy links").clicked() {
+                                        ui.output_mut(|output| output.copied_text = self.links_to_display.join("\n"));
+                                        ui.close_menu();
+                                    }
+                                });
+                            };
+                            self.selected_links = selected_links.iter().map(|url| url.to_string()).collect();
                         });
                     });
             });

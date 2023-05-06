@@ -1,7 +1,8 @@
-use eframe::egui::ScrollArea;
+use std::mem;
+use eframe::egui::{Checkbox, ScrollArea};
 use eframe::egui::Ui;
 
-
+#[derive(Clone)]
 pub struct FilterMenu {
     pub valid: bool,
     pub invalid: bool,
@@ -47,12 +48,45 @@ impl FilterMenu {
                     }
                 }
             };
+
             ui.separator();
-            ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Host Filter").show(ui, |ui| {
-                for host in filter.hosts.iter_mut() {
-                    ui.checkbox(&mut host.1, host.0.clone());
+
+            ScrollArea::vertical().id_source("Host Filter").min_scrolled_height(ui.available_height()).show(ui, |ui| {
+                let mut new_filter = filter.clone();
+                for orig_host in filter.hosts.iter_mut() {
+                    let host_name = &orig_host.0.clone();
+
+                    let checkbox = ui.checkbox(&mut orig_host.1, host_name);
+
+
                 }
             });
         });
     }
 }
+
+//checkbox.context_menu(|ui| {
+//    if ui.button(format!("Select {} links only", host_name)).clicked() {
+//        for (host, selected) in filter.hosts.iter_mut() {
+//            if host.to_string() == host_name.to_string() {
+//                selected = &mut true;
+//            } else {
+//                selected = &mut false;
+//            };
+//        };
+//        ui.close_menu();
+//    }
+//});
+
+//checkbox.context_menu(|ui| {
+//if ui.button(format!("Select {} links only", host_name)).clicked() {
+//for (host, selected) in new_filter.hosts {
+//if host.to_string() == host_name.to_string() {
+//selected = true;
+//} else {
+//selected = &mut false;
+//};
+//};
+//ui.close_menu();
+//}
+//});

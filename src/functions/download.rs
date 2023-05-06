@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::mpsc;
 use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
@@ -9,29 +8,40 @@ pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link
     let links = fix_mirror_links(links); // All links are ok
 
     let (tx, rx) = mpsc::channel();
+    let mut n = 1;
     for link in links {
         let tx = tx.clone();
         let temp_link = link.clone();
         tokio::spawn(async move {
             let generated_links = scrape_link(&temp_link, check_status).await;
-            tx.send(generated_links).unwrap();
+            tx.send((generated_links, n)).unwrap();
         });
+        n += 1
     }
     drop(tx);
-    let mut direct_links: Vec<Link> = vec![];
-    for received_links in rx {
-        direct_links.extend(received_links);
+    //let mut direct_links: Vec<Link> = vec![];
+    //for (received_links, order) in rx {
+    //    direct_links.extend(received_links);
+    //}
+    let a = vec![1];
+
+    let mut ordered_links: Vec<(Vec<Link>, i32)> = vec![];
+    for (mut a, b) in rx {
+        a.sort_by_key(|link| link.name_host.clone());
+        ordered_links.push((a, b));
     }
+
+    ordered_links.sort_by_key(|a| a.1);
+    let direct_links: Vec<Link> = ordered_links.into_iter().flat_map(|v| v.0).collect();
 
     let filter_hosts = set_filter_hosts(&direct_links);
     (direct_links, filter_hosts)
 }
 
-/// Convert short and long links to the en/mirror page. Removes duplicates,
-pub fn fix_mirror_links(url: &str) -> Vec<String> {
+/// Convert short and long links to the en/mirror page. Removes duplicates
+pub fn fix_mirror_links(links: &str) -> Vec<String> {
     let re = regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap();
-    let mut links = HashSet::new();
-    url.split('\n')
+    let a: Vec<String> = links.split('\n')
         .map(|link| {
             let link = link.trim().split(' ').next().unwrap();
             let fixed_link = if !link.starts_with("https://multiup.org/en/mirror/") && link.starts_with("https://multiup.org/") {
@@ -51,9 +61,17 @@ pub fn fix_mirror_links(url: &str) -> Vec<String> {
             }
         })
         .filter(|link| !link.is_empty())
-        .for_each(|link| { links.insert(link); });
-    links.into_iter().collect()
+        .collect();
+
+    let mut mirror_links = vec![];
+    for link in a {
+        if !mirror_links.contains(&link) {
+            mirror_links.push(link)
+        }
+    };
+    mirror_links
 }
+
 
 async fn scrape_link(mirror_link: &str, check_status: bool) -> Vec<Link> {
     let link_hosts = scrape_link_for_hosts(mirror_link).await;

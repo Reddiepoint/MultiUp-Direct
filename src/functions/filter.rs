@@ -2,10 +2,10 @@
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::Link;
 
-pub fn filter_links(links: &[Link], filter: &FilterMenu) -> String {
+pub fn filter_links(links: &[Link], filter: &FilterMenu) -> Vec<String> {
     // let display_links: Vec<&str> = links.iter().filter(|link|).map(|link| link.url.as_str()).collect();
     // let display = display_links.join("\n");
-    let display_links: Vec<&str> = links
+    links
         .iter()
         .filter(|link| match link.validity.as_str() {
             "valid" => filter.valid,
@@ -18,10 +18,8 @@ pub fn filter_links(links: &[Link], filter: &FilterMenu) -> String {
         })
 
         .map(|link| {
-            link.url.as_str() })
-        .collect();
-
-    display_links.join("\n")
+            link.url.to_string() })
+        .collect()
 }
 
 pub fn set_filter_hosts(links: &[Link]) -> Vec<(String, bool)> {
