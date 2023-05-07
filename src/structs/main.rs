@@ -1,8 +1,8 @@
-use eframe::egui::{self, CentralPanel, menu};
-use crate::constants::about::VERSION;
+use eframe::egui::{self, menu, CentralPanel};
 
-use crate::structs::{download::Download, login::LoginData, settings::Settings, upload::Upload};
+use crate::constants::about::VERSION;
 use crate::structs::help::Help;
+use crate::structs::{download::Download, login::LoginData, settings::Settings, upload::Upload};
 
 #[derive(Default)]
 pub struct Application {
@@ -34,7 +34,7 @@ impl eframe::App for Application {
                     (Panel::Settings, "Settings"),
                 ] {
                     ui.selectable_value(&mut self.panel, panel, label);
-                };
+                }
                 menu::bar(ui, |ui| {
                     ui.menu_button("About", |ui| {
                         if ui.button("Show help").clicked() {
@@ -44,8 +44,6 @@ impl eframe::App for Application {
                         ui.label(format!("Version {}", VERSION))
                     });
                 });
-
-
             });
         });
 
@@ -59,14 +57,12 @@ impl eframe::App for Application {
             match &self.panel {
                 Panel::Download => Download::show(ui, &mut self.download),
                 Panel::Upload => Upload::show(ctx, ui),
-                Panel::Settings => Settings::show(ctx, ui),
+                Panel::Settings => Settings::show(ui),
             };
 
             if self.show_help {
                 Help::show(ctx, &mut self.show_help);
             }
         });
-
-
     }
 }

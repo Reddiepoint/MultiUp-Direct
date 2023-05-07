@@ -2,13 +2,13 @@ use crate::structs::login::{
     LoginData,
 };
 
-use std::error::Error;
 
-use std::future::Future;
-use std::io;
+
+
+
 use std::io::Read;
-use std::path::Path;
-use reqwest::{Body, multipart};
+
+use reqwest::{multipart};
 use reqwest::multipart::Part;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
@@ -28,7 +28,7 @@ pub async fn upload(upload_url: FastestServer) -> String {
     let file_name = "test.txt";
 
     let file_content = tokio::fs::read(file_path).await.unwrap();
-    let part = multipart::Part::bytes(file_content).file_name(file_name);
+    let part = Part::bytes(file_content).file_name(file_name);
 
     let form = multipart::Form::new().part("files", part);
 

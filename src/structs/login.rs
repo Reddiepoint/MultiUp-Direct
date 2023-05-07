@@ -1,6 +1,5 @@
 use crate::functions::login::login;
 use eframe::egui::{self, Context};
-use pollster::FutureExt;
 use serde::{Deserialize, Serialize};
 use egui::widgets::text_edit::TextEdit;
 use tokio::runtime::Runtime;

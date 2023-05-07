@@ -19,11 +19,6 @@ pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link
         n += 1
     }
     drop(tx);
-    //let mut direct_links: Vec<Link> = vec![];
-    //for (received_links, order) in rx {
-    //    direct_links.extend(received_links);
-    //}
-    let a = vec![1];
 
     let mut ordered_links: Vec<(Vec<Link>, i32)> = vec![];
     for (mut a, b) in rx {

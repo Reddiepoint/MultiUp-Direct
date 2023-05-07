@@ -1,10 +1,6 @@
 use std::collections::HashSet;
-use std::sync::{Arc, mpsc, Mutex, MutexGuard};
-use std::sync::mpsc::{RecvError, SendError, TryRecvError};
-use std::time::Duration;
-
-use eframe::egui::{Label, ScrollArea, Sense, TextBuffer, TextEdit, Ui};
-use pollster::FutureExt;
+use std::sync::mpsc;
+use eframe::egui::{Label, ScrollArea, Sense, TextEdit, Ui};
 use tokio::runtime::Runtime;
 
 
@@ -68,7 +64,7 @@ impl Download {
             if ui.button("Generate links").clicked() {
                 let rt = Runtime::new().expect("Unable to create runtime");
                 let _ = rt.enter();
-                let (tx, rx) = std::sync::mpsc::sync_channel(0);
+                let (tx, rx) = mpsc::channel();
                 // Create runtime
                 let mirror_links = self.mirror_links_input.clone();
                 let check_status = self.check_status;

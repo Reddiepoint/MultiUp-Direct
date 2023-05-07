@@ -1,6 +1,4 @@
-use std::mem;
-use eframe::egui::{Checkbox, ScrollArea};
-use eframe::egui::Ui;
+use eframe::egui::{ScrollArea, Ui};
 
 #[derive(Clone)]
 pub struct FilterMenu {
@@ -76,29 +74,3 @@ impl FilterMenu {
         });
     }
 }
-
-//checkbox.context_menu(|ui| {
-//    if ui.button(format!("Select {} links only", host_name)).clicked() {
-//        for (host, selected) in filter.hosts.iter_mut() {
-//            if host.to_string() == host_name.to_string() {
-//                selected = &mut true;
-//            } else {
-//                selected = &mut false;
-//            };
-//        };
-//        ui.close_menu();
-//    }
-//});
-
-//checkbox.context_menu(|ui| {
-//if ui.button(format!("Select {} links only", host_name)).clicked() {
-//for (host, selected) in new_filter.hosts {
-//if host.to_string() == host_name.to_string() {
-//selected = true;
-//} else {
-//selected = &mut false;
-//};
-//};
-//ui.close_menu();
-//}
-//});
