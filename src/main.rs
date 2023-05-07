@@ -1,14 +1,10 @@
 #![windows_subsystem = "windows"]
 
-
+mod constants;
 mod functions;
 mod structs;
 
-
-use std::sync::mpsc::Sender;
 use eframe::egui;
-use tokio::runtime::Runtime;
-use crate::structs::hosts::Link;
 use crate::structs::main::Application;
 
 fn main() -> Result<(), eframe::Error> {

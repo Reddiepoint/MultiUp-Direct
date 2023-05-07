@@ -1,4 +1,5 @@
 use eframe::egui::{self, CentralPanel, menu};
+use crate::constants::about::VERSION;
 
 use crate::structs::{download::Download, login::LoginData, settings::Settings, upload::Upload};
 use crate::structs::help::Help;
@@ -35,11 +36,12 @@ impl eframe::App for Application {
                     ui.selectable_value(&mut self.panel, panel, label);
                 };
                 menu::bar(ui, |ui| {
-                    ui.menu_button("Help", |ui| {
+                    ui.menu_button("About", |ui| {
                         if ui.button("Show help").clicked() {
                             self.show_help = true;
                             ui.close_menu();
                         };
+                        ui.label(format!("Version {}", VERSION))
                     });
                 });
 
