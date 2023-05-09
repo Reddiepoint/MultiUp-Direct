@@ -15,7 +15,6 @@ fn main() -> Result<(), eframe::Error> {
         centered: true,
         ..Default::default()
     };
-
     eframe::run_native(
         "MultiUp Direct",
         options,

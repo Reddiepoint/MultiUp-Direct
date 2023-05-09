@@ -9,6 +9,7 @@ edition = "2021"
 
 
 [dependencies]
+crossbeam-channel = "0.5.8"
 eframe = { version = "0.21.3" }
 reqwest = { version = "0.11.16", features = ["json", "multipart", "stream"] }
 regex = "1.8.1"
