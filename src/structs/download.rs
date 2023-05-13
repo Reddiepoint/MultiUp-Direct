@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 
 use std::time::Instant;
-use crossbeam_channel::{Receiver};
+use crossbeam_channel::{Receiver, SendError};
 use eframe::egui::{Button, Label, ScrollArea, Sense, TextEdit, Ui};
 
 use tokio::runtime::Runtime;
 
 
-use crate::functions::download::generate_direct_links;
+use crate::functions::download::{fix_mirror_links, generate_direct_links};
 use crate::functions::filter::filter_links;
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::Link;
@@ -29,6 +29,10 @@ pub struct Download {
     pub generation_time: u128,
     pub generation_status_receiver: Option<Receiver<bool>>,
     pub generation_status: Option<bool>,
+    pub number_of_links_receiver: Option<Receiver<usize>>,
+    pub total_links: usize,
+    pub number_of_generated_links_receiver: Option<Receiver<u8>>,
+    pub number_of_generated_links: usize,
     //pub emergency_stop: bool
 }
 
@@ -50,6 +54,10 @@ impl Default for Download {
             generation_status_receiver: None,
             generation_status: None,
             //emergency_stop: false,
+            number_of_links_receiver: None,
+            total_links: 0,
+            number_of_generated_links_receiver: None,
+            number_of_generated_links: 0,
         }
     }
 }
@@ -96,12 +104,18 @@ impl Download {
                 let (link_tx, link_rx) = crossbeam_channel::unbounded();
                 let (status_tx, status_rx) = crossbeam_channel::unbounded();
                 let (time_tx, time_rx) = crossbeam_channel::unbounded();
+                let (number_of_links_tx, number_of_links_rx) = crossbeam_channel::unbounded();
+                let (number_of_generated_links_tx, number_of_generated_links_rx) = crossbeam_channel::unbounded();
 
 
                 // Store the receivers in fields to use later
                 self.receiver = Some(link_rx);
                 self.generation_time_receiver = Some(time_rx);
                 self.generation_status_receiver = Some(status_rx);
+                self.number_of_links_receiver = Some(number_of_links_rx);
+                self.total_links = 0;
+                self.number_of_generated_links_receiver = Some(number_of_generated_links_rx);
+                self.number_of_generated_links = 0;
                 //self.emergency_stop = false;
 
                 // Send initial values
@@ -109,11 +123,13 @@ impl Download {
                 status_tx.send(true);
 
 
-                self.timer_start = Some(std::time::Instant::now());
+                self.timer_start = Some(Instant::now());
                 // Spawn a thread to generate direct links
                 std::thread::spawn(move || {
                     let result = rt.block_on(async {
-                        generate_direct_links(&mirror_links, check_status).await
+                        let links = fix_mirror_links(&mirror_links); // All links are ok
+                        number_of_links_tx.send(links.len());
+                        generate_direct_links(links, check_status, number_of_generated_links_tx).await
                     });
                     link_tx.send(result).expect("Unable to send result");
                     status_tx.send(false);
@@ -125,15 +141,24 @@ impl Download {
                 if generating {
                     ui.spinner();
                     ui.label("Generating...");
-                    if ui.button("Stop!").clicked() {
-
-                    };
                 } else {
                     ui.label("Generated!");
                 };
             };
 
             // Update fields from receivers
+            if let Some(rx) = &self.number_of_links_receiver {
+                if let Ok(size) = rx.try_recv() {
+                    self.total_links = size;
+                    println!("{}", self.total_links);
+                }
+            };
+            if let Some(rx) = &self.number_of_generated_links_receiver {
+                while let Ok(generated) = rx.try_recv() {
+                    self.number_of_generated_links += generated as usize;
+                }
+            };
+
 
             if let Some(rx) = &self.generation_status_receiver {
                 if let Ok(generating) = rx.try_recv() {
@@ -152,9 +177,12 @@ impl Download {
                     self.generation_time = time;
                 }
             }
+
             if self.generation_time != 0 {
                 let formatted_time = format!("Time taken: {}.{}s", self.generation_time / 1000, self.generation_time % 1000);
                 ui.label(formatted_time);
+                let formatted_progress = format!("{}/{} completed.", self.number_of_generated_links, self.total_links);
+                ui.label(formatted_progress);
             }
 
 

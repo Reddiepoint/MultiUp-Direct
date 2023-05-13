@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc;
-use crossbeam_channel::SendError;
+use crossbeam_channel::{Sender, SendError};
 use eframe::egui::Key::P;
 use once_cell::sync::Lazy;
 use crate::functions::filter::set_filter_hosts;
@@ -8,9 +8,8 @@ use crate::functions::hosts::check_validity;
 use crate::structs::hosts::Link;
 
 
-pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link>, Vec<(String, bool)>) {
-    let links = fix_mirror_links(links); // All links are ok
-    let (tx, rx) = crossbeam_channel::unbounded();
+pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>) -> (Vec<Link>, Vec<(String, bool)>) {
+    let (tx, rx) = crossbeam_channel::bounded(100);
     for link in links {
         let tx = tx.clone();
         let temp_link = link.clone();
@@ -19,12 +18,15 @@ pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link
             tx.send(generated_links).unwrap();
         });
     }
+    drop(tx);
     let mut direct_links: Vec<Link> = vec![];
     for received_links in rx {
         direct_links.extend(received_links);
+        number_of_links_tx.send(1);
     }
 
     let filter_hosts = set_filter_hosts(&direct_links);
+
     (direct_links, filter_hosts)
 }
 
@@ -41,6 +43,12 @@ pub fn fix_mirror_links(links: &str) -> Vec<String> {
         let fixed_link = if link.starts_with(prefix) {
             link.to_string() // No need to modify the link
         } else if let Some(suffix) = link.strip_prefix("https://multiup.org/download/"){
+            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
+            if !RE.is_match(&fixed_link) {
+                fixed_link.push_str("/a"); // Same as before
+            };
+            fixed_link
+        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/en/download/"){
             let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
             if !RE.is_match(&fixed_link) {
                 fixed_link.push_str("/a"); // Same as before
