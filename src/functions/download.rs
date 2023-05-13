@@ -38,10 +38,11 @@ pub fn fix_mirror_links(links: &str) -> Vec<String> {
     let prefix = "https://multiup.org/en/mirror/"; // Store the common prefix as a constant
     for link in links.lines() {
         let link = link.trim().split(' ').next().unwrap();
+        let link = link.replace("www.", "");
 
         // Use starts_with and strip_prefix instead of replace
         let fixed_link = if link.starts_with(prefix) {
-            link.to_string() // No need to modify the link
+            link // No need to modify the link
         } else if let Some(suffix) = link.strip_prefix("https://multiup.org/download/"){
             let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
             if !RE.is_match(&fixed_link) {
@@ -70,8 +71,6 @@ pub fn fix_mirror_links(links: &str) -> Vec<String> {
     };
     mirror_links
 }
-
-
 
 async fn scrape_link(mirror_link: &str, check_status: bool) -> Vec<Link> {
     let link_hosts = scrape_link_for_hosts(mirror_link).await;
