@@ -1,4 +1,8 @@
+use std::collections::BTreeMap;
 use std::sync::mpsc;
+use crossbeam_channel::SendError;
+use eframe::egui::Key::P;
+use once_cell::sync::Lazy;
 use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
 use crate::structs::hosts::Link;
@@ -6,84 +10,77 @@ use crate::structs::hosts::Link;
 
 pub async fn generate_direct_links(links: &str, check_status: bool) -> (Vec<Link>, Vec<(String, bool)>) {
     let links = fix_mirror_links(links); // All links are ok
-
-    let (tx, rx) = mpsc::channel();
-    let mut n = 1;
+    let (tx, rx) = crossbeam_channel::unbounded();
     for link in links {
         let tx = tx.clone();
         let temp_link = link.clone();
         tokio::spawn(async move {
             let generated_links = scrape_link(&temp_link, check_status).await;
-            tx.send((generated_links, n)).unwrap();
+            tx.send(generated_links).unwrap();
         });
-        n += 1
     }
-    drop(tx);
-
-    let mut ordered_links: Vec<(Vec<Link>, i32)> = vec![];
-    for (mut a, b) in rx {
-        a.sort_by_key(|link| link.name_host.clone());
-        ordered_links.push((a, b));
+    let mut direct_links: Vec<Link> = vec![];
+    for received_links in rx {
+        direct_links.extend(received_links);
     }
-
-    ordered_links.sort_by_key(|a| a.1);
-    let direct_links: Vec<Link> = ordered_links.into_iter().flat_map(|v| v.0).collect();
 
     let filter_hosts = set_filter_hosts(&direct_links);
     (direct_links, filter_hosts)
 }
 
+static RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
 pub fn fix_mirror_links(links: &str) -> Vec<String> {
-    let re = regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap();
-    let a: Vec<String> = links.split('\n')
-        .map(|link| {
-            let link = link.trim().split(' ').next().unwrap();
-            let fixed_link = if !link.starts_with("https://multiup.org/en/mirror/") && link.starts_with("https://multiup.org/") {
-                let mut fixed_link = link.replace("https://multiup.org/", "https://multiup.org/en/mirror/").replace("download/", "");
-                if !re.is_match(&fixed_link) {
-                    fixed_link += "/a";
-                };
-                fixed_link
-            } else {
-                link.to_string()
+    let mut mirror_links = Vec::with_capacity(links.lines().count()); // Pre-allocate memory for the vector
+    //let mut mirror_links = vec![];
+    let prefix = "https://multiup.org/en/mirror/"; // Store the common prefix as a constant
+    for link in links.lines() {
+        let link = link.trim().split(' ').next().unwrap();
+
+        // Use starts_with and strip_prefix instead of replace
+        let fixed_link = if link.starts_with(prefix) {
+            link.to_string() // No need to modify the link
+        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/download/"){
+            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
+            if !RE.is_match(&fixed_link) {
+                fixed_link.push_str("/a"); // Same as before
             };
+            fixed_link
+        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/"){
+            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
+            if !RE.is_match(&fixed_link) {
+                fixed_link.push_str("/a"); // Same as before
+            };
+            fixed_link
+        } else {
+            String::new() // Same as before
+        };
 
-            if !re.is_match(&fixed_link) {
-                String::new()
-            } else {
-                fixed_link
-            }
-        })
-        .filter(|link| !link.is_empty())
-        .collect();
-
-    let mut mirror_links = vec![];
-    for link in a {
-        if !mirror_links.contains(&link) {
-            mirror_links.push(link)
+        if !fixed_link.is_empty() && !mirror_links.contains(&fixed_link) {
+            mirror_links.push(fixed_link)
         }
     };
     mirror_links
 }
 
 
+
 async fn scrape_link(mirror_link: &str, check_status: bool) -> Vec<Link> {
     let link_hosts = scrape_link_for_hosts(mirror_link).await;
     if link_hosts.is_empty() {
-        vec![Link::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]
-    } else if check_status {
-        let hosts = check_validity(mirror_link).await;
-        link_hosts.into_iter().map(|link| {
-            let status = match hosts.get(&link.name_host).unwrap() {
-                Some(validity) => validity,
-                None => "unknown"
-            };
-            Link::new(link.name_host, link.url, status.to_string())
-        }).collect()
-    } else {
-        link_hosts
+        return vec![Link::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())];
     }
+    if !check_status {
+        return link_hosts;
+    }
+    let hosts = check_validity(mirror_link).await;
+    link_hosts.into_iter().map(|link| {
+        let status = match hosts.get(&link.name_host).unwrap() {
+            Some(validity) => validity,
+            None => "unknown"
+        };
+        Link::new(link.name_host, link.url, status.to_string())
+    }).collect()
 }
 
 async fn scrape_link_for_hosts(url: &str) -> Vec<Link> {
