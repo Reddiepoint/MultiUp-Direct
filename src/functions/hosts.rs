@@ -4,12 +4,12 @@ use tokio::runtime::Runtime;
 
 use crate::structs::hosts::{AvailableHostsResponse, LinkValidityResponse, Url};
 
-pub async fn check_validity(url: &str) -> HashMap<String, Option<String>>{
+pub async fn check_validity(url: &str) -> LinkValidityResponse {
     let client = reqwest::Client::new();
     let response = client.post("https://multiup.org/api/check-file")
         .form(&Url { link: url.to_string()})
         .send().await.unwrap().json::<LinkValidityResponse>().await.unwrap();
-    response.hosts
+    response
 }
 
 pub fn get_available_hosts() -> Vec<String> {

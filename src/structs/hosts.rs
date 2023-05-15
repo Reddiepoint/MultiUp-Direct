@@ -18,16 +18,16 @@ impl Link {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct LinkValidityResponse {
     error: String,
-    file_name: String,
-    size: String,
-    date_upload: String,
-    time_upload: u64,
-    date_last_download: String,
-    number_downloads: u64,
-    description: Option<String>,
+    pub file_name: String,
+    pub size: String,
+    pub date_upload: String,
+    pub time_upload: u64,
+    pub date_last_download: String,
+    pub number_downloads: u64,
+    pub description: Option<String>,
     pub hosts: HashMap<String, Option<String>>,
 }
 

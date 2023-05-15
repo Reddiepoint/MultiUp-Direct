@@ -10,7 +10,7 @@ use tokio::runtime::Runtime;
 use crate::functions::download::{fix_mirror_links, generate_direct_links};
 use crate::functions::filter::filter_links;
 use crate::structs::filter::FilterMenu;
-use crate::structs::hosts::Link;
+use crate::structs::hosts::{Link, LinkValidityResponse};
 
 
 #[derive(Clone)]
@@ -21,6 +21,8 @@ pub struct Download {
     pub links_to_display: Vec<String>,
     pub filter: FilterMenu,
     pub selected_links: Vec<String>,
+    pub link_information: Vec<LinkValidityResponse>,
+    pub link_info_receiver: Option<Receiver<Vec<LinkValidityResponse>>>,
     pub index_1: usize,
     pub index_2: usize,
     pub receiver: Option<Receiver<(Vec<Link>, Vec<(String, bool)>)>>,
@@ -45,6 +47,8 @@ impl Default for Download {
             links_to_display: vec![],
             filter: FilterMenu::default(),
             selected_links: vec![],
+            link_information: vec![],
+            link_info_receiver: None,
             index_1: 0,
             index_2: 0,
             receiver: None,
@@ -68,12 +72,41 @@ impl Download {
         ui.label("Enter your MultiUp links:");
         ui.vertical(|ui| {
             ui.set_max_height(height);
-            ScrollArea::vertical().min_scrolled_height(ui.available_height()).show(ui, |ui| {
+            ScrollArea::vertical().id_source("Input Box").max_height(ui.available_height() / 2.0).min_scrolled_height(ui.available_height() / 2.0).show(ui, |ui| {
                 ui.add(TextEdit::multiline(&mut self.mirror_links_input)
                     .hint_text("Enter your MultiUp links separated by a new line\nSupports short and long links")
                     .desired_width(ui.available_width())
                 );
             });
+            if !self.link_information.is_empty() {
+                ui.collapsing("Link Information", |ui| {
+                    ScrollArea::vertical().id_source("File Info").min_scrolled_height(ui.available_height()).show(ui, |ui| {
+                        for file in self.link_information.iter() {
+                            let info = if let Some(description) = &file.description {
+                                format!("{} | {} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                                        file.file_name,
+                                        description,
+                                        file.size,
+                                        file.date_upload,
+                                        file.time_upload,
+                                        file.number_downloads,
+                                )
+
+                            } else {
+                                format!("{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                                        file.file_name,
+                                        file.size,
+                                        file.date_upload,
+                                        file.time_upload,
+                                        file.number_downloads,
+                                )
+                            };
+                            ui.label(info);
+
+                        }
+                    });
+                });
+            }
         });
     }
 
@@ -106,10 +139,13 @@ impl Download {
                 let (time_tx, time_rx) = crossbeam_channel::unbounded();
                 let (number_of_links_tx, number_of_links_rx) = crossbeam_channel::unbounded();
                 let (number_of_generated_links_tx, number_of_generated_links_rx) = crossbeam_channel::unbounded();
+                let (link_info_tx, link_info_rx) = crossbeam_channel::unbounded();
 
 
                 // Store the receivers in fields to use later
                 self.receiver = Some(link_rx);
+                self.link_information = vec![];
+                self.link_info_receiver = Some(link_info_rx);
                 self.generation_time_receiver = Some(time_rx);
                 self.generation_status_receiver = Some(status_rx);
                 self.number_of_links_receiver = Some(number_of_links_rx);
@@ -129,7 +165,7 @@ impl Download {
                     let result = rt.block_on(async {
                         let links = fix_mirror_links(&mirror_links); // All links are ok
                         number_of_links_tx.send(links.len());
-                        generate_direct_links(links, check_status, number_of_generated_links_tx).await
+                        generate_direct_links(links, check_status, number_of_generated_links_tx, link_info_tx).await
                     });
                     link_tx.send(result).expect("Unable to send result");
                     status_tx.send(false);
@@ -147,10 +183,14 @@ impl Download {
             };
 
             // Update fields from receivers
+            if let Some(rx) = &self.link_info_receiver {
+                if let Ok(info) = rx.try_recv() {
+                    self.link_information = info;
+                }
+            };
             if let Some(rx) = &self.number_of_links_receiver {
                 if let Ok(size) = rx.try_recv() {
                     self.total_links = size;
-                    println!("{}", self.total_links);
                 }
             };
             if let Some(rx) = &self.number_of_generated_links_receiver {

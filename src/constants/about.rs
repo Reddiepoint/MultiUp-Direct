@@ -3,9 +3,7 @@ pub const HELP_MESSAGE: &str = "Instructions:\n\
             You can paste multiple links separated by a new line.\n\n\
             2. Choose whether you want MultiUp to check the validity of the hosts by checking \
             the \"Re-check host status\" checkbox.\n\n\
-            3. Click \"Generate links\" to generate the direct links.\n\
-            The application may freeze, but this is normal. \
-            Please wait for the app to respond.\n\n\
+            3. Click \"Generate links\" to generate the direct links.\n\n\
             4. The direct links will be displayed underneath.\n\
             You can select a combination of links by holding down CTRL and clicking on links, \
             select consecutive links by clicking and holding SHIFT, \
@@ -19,7 +17,8 @@ pub const HELP_MESSAGE: &str = "Instructions:\n\
             You can quickly select one host only by right clicking the host and \
             pressing the button.\n\n\
             Note:  Enabling \"Re-check host status\" will take longer to generate the links \
-            than disabling the feature, but it will give you more accurate information. \
+            than disabling the feature (possibly over a minute), but it will give you more \
+            accurate information. \
             If you get unchecked links, it may be worth it to \
             generate the links with \"Re-check host status\" enabled.";
 
