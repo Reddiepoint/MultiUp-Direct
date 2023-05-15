@@ -23,47 +23,22 @@ pub async fn generate_direct_links(links: Vec<String>, check_status: bool, numbe
         });
     }
     drop(tx);
-    let mut direct_links: Vec<Link> = vec![];
-    //let mut unordered_links: Vec<(usize, (Vec<Link>, Option<LinkValidityResponse>))> = vec![];
-    //for (order, received_links) in rx {
-    //    unordered_links.push((order, received_links));
-    //    unordered_links.sort_by_key(|(order, link)| order.to_owned());
-    //    let ordered_direct_links: Vec<Vec<Link>> = unordered_links.iter().map(|(order, link)| link.0.clone()).collect();
-    //    direct_links = ordered_direct_links.iter().flat_map(|link| {
-    //        let mut a = link.clone();
-    //        a.sort_by_key(|link| link.name_host.clone());
-    //        a
-    //    }).collect();
-    //
-    //    let a: Vec<LinkValidityResponse> = unordered_links.iter().filter(|(order, link)| link.1.is_some())
-    //        .map(|(order, link)| link.1.clone().unwrap()).collect();
-    //    link_info_tx.send(a);
-    //    number_of_links_tx.send(1);
-    //}
 
+    let mut direct_links: Vec<Link> = vec![];
     let mut unordered_links: Vec<(usize, (Vec<Link>, Option<LinkValidityResponse>))> = vec![];
     for (order, received_links) in rx {
-        println!("received");
-
-        let mut index = 0;
-        while index < unordered_links.len() && unordered_links[index].0 < order {
-            index += 1;
-        }
+        let index = unordered_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
         unordered_links.insert(index, (order, received_links));
-
-        // clear the direct_links vector and fill it with the ordered and sorted links
-
         let responses: Vec<LinkValidityResponse> = unordered_links.iter().filter_map(|(_, (_, response))| response.clone()).collect();
         link_info_tx.send(responses);
         number_of_links_tx.send(1);
     }
 
-    for (_, (links, _)) in unordered_links.iter() {
-        let links = links.clone();
-        links.clone().sort_by_key(|link| link.name_host.clone());
+    for (_, (mut links, _)) in unordered_links {
+        // sort the links by name_host in place
+        links.sort_by_key(|link| link.name_host.clone());
         direct_links.extend(links);
     }
-
 
     let filter_hosts = set_filter_hosts(&direct_links);
 
