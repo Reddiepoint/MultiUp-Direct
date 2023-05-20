@@ -8,7 +8,7 @@ use reqwest::{Client, Error};
 
 use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
-use crate::structs::hosts::{Link, LinkValidityResponse};
+use crate::structs::hosts::{DirectLink, LinkValidityResponse};
 
 static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
@@ -45,7 +45,7 @@ pub fn fix_mirror_links(multiup_links: &str) -> Vec<String> {
     mirror_links
 }
 
-pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>, link_info_tx: Sender<Vec<LinkValidityResponse>>) -> (Vec<Link>, Vec<(String, bool)>) {
+pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>, link_info_tx: Sender<Vec<LinkValidityResponse>>) -> (Vec<DirectLink>, Vec<(String, bool)>) {
     let (tx, rx) = crossbeam_channel::unbounded();
     let client = reqwest::Client::new();
     for (order, link) in links.iter().enumerate() {
@@ -59,8 +59,8 @@ pub async fn generate_direct_links(links: Vec<String>, check_status: bool, numbe
     }
     drop(tx);
 
-    let mut direct_links: Vec<Link> = vec![];
-    let mut unordered_links: Vec<(usize, (Vec<Link>, Option<LinkValidityResponse>))> = vec![];
+    let mut direct_links: Vec<DirectLink> = vec![];
+    let mut unordered_links: Vec<(usize, (Vec<DirectLink>, Option<LinkValidityResponse>))> = vec![];
     for (order, received_links) in rx {
         let index = unordered_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
         unordered_links.insert(index, (order, received_links));
@@ -82,10 +82,10 @@ pub async fn generate_direct_links(links: Vec<String>, check_status: bool, numbe
 
 
 
-async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> (Vec<Link>, Option<LinkValidityResponse>) {
+async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> (Vec<DirectLink>, Option<LinkValidityResponse>) {
     let link_hosts = scrape_link_for_hosts(mirror_link, client).await;
     if link_hosts.is_empty() {
-        return (vec![Link::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())], None);
+        return (vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())], None);
     }
     if !check_status {
         return (link_hosts, None);
@@ -96,18 +96,18 @@ async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> 
             Some(validity) => validity,
             None => "unknown"
         };
-        Link::new(link.name_host, link.url, status.to_string())
+        DirectLink::new(link.name_host, link.url, status.to_string())
     }).collect(), Some(hosts))
 }
 
 static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
-async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<Link> {
+async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
     // Regular links
-    let mut links: Vec<Link> = vec![];
+    let mut links: Vec<DirectLink> = vec![];
     // Scrape panel
     let website_html = match get_html(url, client).await {
         Ok(html) => html,
-        Err(error) => return vec![Link::new("error".to_string(), error.to_string(), "invalid".to_string())]
+        Err(error) => return vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())]
     };
 
     let website_html = scraper::Html::parse_document(&website_html);
@@ -115,7 +115,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<Link> {
         let name_host = element.value().attr("namehost").unwrap();
         let link = element.value().attr("link").unwrap();
         let validity = element.value().attr("validity").unwrap();
-        links.push(Link::new(name_host.to_string(), link.to_string(), validity.to_string()))
+        links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
     };
 
     links // Will be empty if invalid page

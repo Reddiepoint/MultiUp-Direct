@@ -2,20 +2,25 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
-pub struct Link {
+pub struct DirectLink {
     pub name_host: String,
     pub url: String,
     pub validity: String,
 }
 
-impl Link {
+impl DirectLink {
     pub fn new(name_host: String, url: String, validity: String) -> Self {
-        Link {
+        DirectLink {
             name_host,
             url,
             validity
         }
     }
+}
+
+pub struct MirrorLink {
+    url: String,
+    direct_links: Option<Vec<DirectLink>>
 }
 
 #[derive(Clone, Deserialize)]
