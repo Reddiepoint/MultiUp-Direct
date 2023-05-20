@@ -9,42 +9,6 @@ use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
 use crate::structs::hosts::{Link, LinkValidityResponse};
 
-
-pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>, link_info_tx: Sender<Vec<LinkValidityResponse>>) -> (Vec<Link>, Vec<(String, bool)>) {
-    let (tx, rx) = crossbeam_channel::unbounded();
-    let client = reqwest::Client::new();
-    for (order, link) in links.iter().enumerate() {
-        let tx = tx.clone();
-        let temp_link = link.clone();
-        let client = client.clone();
-        tokio::spawn(async move {
-            let generated_links = scrape_link(&temp_link, check_status, &client).await;
-            tx.send((order, generated_links)).unwrap();
-        });
-    }
-    drop(tx);
-
-    let mut direct_links: Vec<Link> = vec![];
-    let mut unordered_links: Vec<(usize, (Vec<Link>, Option<LinkValidityResponse>))> = vec![];
-    for (order, received_links) in rx {
-        let index = unordered_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
-        unordered_links.insert(index, (order, received_links));
-        let responses: Vec<LinkValidityResponse> = unordered_links.iter().filter_map(|(_, (_, response))| response.clone()).collect();
-        link_info_tx.send(responses);
-        number_of_links_tx.send(1);
-    }
-
-    for (_, (mut links, _)) in unordered_links {
-        // sort the links by name_host in place
-        links.sort_by_key(|link| link.name_host.clone());
-        direct_links.extend(links);
-    }
-
-    let filter_hosts = set_filter_hosts(&direct_links);
-
-    (direct_links, filter_hosts)
-}
-
 static RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
 pub fn fix_mirror_links(links: &str) -> Vec<String> {
@@ -86,6 +50,43 @@ pub fn fix_mirror_links(links: &str) -> Vec<String> {
     };
     mirror_links
 }
+
+pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>, link_info_tx: Sender<Vec<LinkValidityResponse>>) -> (Vec<Link>, Vec<(String, bool)>) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let client = reqwest::Client::new();
+    for (order, link) in links.iter().enumerate() {
+        let tx = tx.clone();
+        let temp_link = link.clone();
+        let client = client.clone();
+        tokio::spawn(async move {
+            let generated_links = scrape_link(&temp_link, check_status, &client).await;
+            tx.send((order, generated_links)).unwrap();
+        });
+    }
+    drop(tx);
+
+    let mut direct_links: Vec<Link> = vec![];
+    let mut unordered_links: Vec<(usize, (Vec<Link>, Option<LinkValidityResponse>))> = vec![];
+    for (order, received_links) in rx {
+        let index = unordered_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
+        unordered_links.insert(index, (order, received_links));
+        let responses: Vec<LinkValidityResponse> = unordered_links.iter().filter_map(|(_, (_, response))| response.clone()).collect();
+        link_info_tx.send(responses);
+        number_of_links_tx.send(1);
+    }
+
+    for (_, (mut links, _)) in unordered_links {
+        // sort the links by name_host in place
+        links.sort_by_key(|link| link.name_host.clone());
+        direct_links.extend(links);
+    }
+
+    let filter_hosts = set_filter_hosts(&direct_links);
+
+    (direct_links, filter_hosts)
+}
+
+
 
 async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> (Vec<Link>, Option<LinkValidityResponse>) {
     let link_hosts = scrape_link_for_hosts(mirror_link, client).await;

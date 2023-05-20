@@ -15,9 +15,9 @@ use crate::structs::hosts::{Link, LinkValidityResponse};
 
 #[derive(Clone)]
 pub struct Download {
-    pub mirror_links_input: String,
+    pub multiup_links: String,
     pub check_status: bool,
-    pub direct_links: Vec<Link>,
+    pub mirror_links: Vec<Link>,
     pub links_to_display: Vec<String>,
     pub filter: FilterMenu,
     pub selected_links: Vec<String>,
@@ -41,9 +41,9 @@ pub struct Download {
 impl Default for Download {
     fn default() -> Self {
         Download {
-            mirror_links_input: String::new(),
+            multiup_links: String::new(),
             check_status: true,
-            direct_links: vec![],
+            mirror_links: vec![],
             links_to_display: vec![],
             filter: FilterMenu::default(),
             selected_links: vec![],
@@ -73,7 +73,7 @@ impl Download {
         ui.vertical(|ui| {
             ui.set_max_height(height);
             ScrollArea::vertical().id_source("Input Box").max_height(ui.available_height() / 2.0).min_scrolled_height(ui.available_height() / 2.0).show(ui, |ui| {
-                ui.add(TextEdit::multiline(&mut self.mirror_links_input)
+                ui.add(TextEdit::multiline(&mut self.multiup_links)
                     .hint_text("Enter your MultiUp links separated by a new line\nSupports short and long links")
                     .desired_width(ui.available_width())
                 );
@@ -114,21 +114,17 @@ impl Download {
         ui.horizontal(|ui| {
             // Check status
             ui.checkbox(&mut self.check_status, "Re-check host status");
-            let button;
-            if let Some(status) = self.generation_status {
-                if status {
-                    button = ui.add_enabled(false, Button::new("Generate links"));
-                } else {
-                    button = ui.add(Button::new("Generate links"));
-                }
+
+            let button = if let Some(status) = self.generation_status {
+                ui.add_enabled(!status, Button::new("Generate links"))
             } else {
-                button = ui.add(Button::new("Generate links"));
-            }
+                ui.add(Button::new("Generate links"))
+            };
 
             // Generate links
             if button.clicked() {
                 // Create runtime
-                let mirror_links = self.mirror_links_input.clone();
+                let mirror_links = self.multiup_links.clone();
                 let check_status = self.check_status;
                 let rt = Runtime::new().expect("Unable to create runtime");
                 let _ = rt.enter();
@@ -141,7 +137,6 @@ impl Download {
                 let (number_of_generated_links_tx, number_of_generated_links_rx) = crossbeam_channel::unbounded();
                 let (link_info_tx, link_info_rx) = crossbeam_channel::unbounded();
 
-
                 // Store the receivers in fields to use later
                 self.receiver = Some(link_rx);
                 self.link_information = vec![];
@@ -152,12 +147,10 @@ impl Download {
                 self.total_links = 0;
                 self.number_of_generated_links_receiver = Some(number_of_generated_links_rx);
                 self.number_of_generated_links = 0;
-                //self.emergency_stop = false;
 
                 // Send initial values
                 time_tx.send(0);
                 status_tx.send(true);
-
 
                 self.timer_start = Some(Instant::now());
                 // Spawn a thread to generate direct links
@@ -193,16 +186,19 @@ impl Download {
                     self.total_links = size;
                 }
             };
+
             if let Some(rx) = &self.number_of_generated_links_receiver {
                 while let Ok(generated) = rx.try_recv() {
                     self.number_of_generated_links += generated as usize;
                 }
             };
 
-
             if let Some(rx) = &self.generation_status_receiver {
                 if let Ok(generating) = rx.try_recv() {
                     self.generation_status = Some(generating);
+                    if !generating {
+                        self.timer_start.take();
+                    }
                 }
             }
 
@@ -229,7 +225,7 @@ impl Download {
 
             if let Some(rx) = &self.receiver {
                 if let Ok((generated_links, links_hosts)) = rx.try_recv() {
-                    self.direct_links = generated_links;
+                    self.mirror_links = generated_links;
                     self.filter.hosts = links_hosts;
                     self.receiver = None;
                 }
@@ -239,7 +235,7 @@ impl Download {
 
     fn display_direct_links(&mut self, ui: &mut Ui) {
         let height = ui.available_height();
-        self.links_to_display = filter_links(&self.direct_links, &self.filter);
+        self.links_to_display = filter_links(&self.mirror_links, &self.filter);
         // Generated direct links output
         ui.horizontal(|ui| {
             ui.set_height(height);
