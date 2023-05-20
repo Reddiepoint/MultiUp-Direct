@@ -100,6 +100,7 @@ async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> 
     }).collect(), Some(hosts))
 }
 
+static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
 async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<Link> {
     // Regular links
     let mut links: Vec<Link> = vec![];
@@ -110,8 +111,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<Link> {
     };
 
     let website_html = scraper::Html::parse_document(&website_html);
-    let button_selector = scraper::Selector::parse(r#"button[type="submit"]"#).unwrap();
-    for element in website_html.select(&button_selector) {
+    for element in website_html.select(&SELECTOR) {
         let name_host = element.value().attr("namehost").unwrap();
         let link = element.value().attr("link").unwrap();
         let validity = element.value().attr("validity").unwrap();
