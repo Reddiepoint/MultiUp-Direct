@@ -5,43 +5,37 @@ use eframe::egui::Key::P;
 use eframe::egui::TextBuffer;
 use once_cell::sync::Lazy;
 use reqwest::{Client, Error};
+
 use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
 use crate::structs::hosts::{Link, LinkValidityResponse};
 
-static RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
+static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
-pub fn fix_mirror_links(links: &str) -> Vec<String> {
-    let mut mirror_links = Vec::with_capacity(links.lines().count()); // Pre-allocate memory for the vector
+pub fn fix_mirror_links(multiup_links: &str) -> Vec<String> {
+    let mut mirror_links = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
     //let mut mirror_links = vec![];
-    let prefix = "https://multiup.org/en/mirror/"; // Store the common prefix as a constant
-    for link in links.lines() {
-        let link = link.trim().split(' ').next().unwrap();
-        let link = link.replace("www.", "");
+    let mirror_prefix = "https://multiup.org/en/mirror/";
+    for line in multiup_links.lines() {
+        let multiup_link = line.trim().split(' ').next().unwrap();
+        let multiup_link = multiup_link.replace("www.", ""); // Compatibility for older links
 
-        // Use starts_with and strip_prefix instead of replace
-        let fixed_link = if link.starts_with(prefix) {
-            link // No need to modify the link
-        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/download/"){
-            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
-            if !RE.is_match(&fixed_link) {
-                fixed_link.push_str("/a"); // Same as before
-            };
-            fixed_link
-        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/en/download/"){
-            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
-            if !RE.is_match(&fixed_link) {
-                fixed_link.push_str("/a"); // Same as before
-            };
-            fixed_link
-        } else if let Some(suffix) = link.strip_prefix("https://multiup.org/"){
-            let mut fixed_link = format!("{}{}", prefix, suffix); // Use format instead of replace
-            if !RE.is_match(&fixed_link) {
-                fixed_link.push_str("/a"); // Same as before
-            };
-            fixed_link
+        let prefixes = ["https://multiup.org/download/", "https://multiup.org/en/download/", "https://multiup.org/"];
+        let fixed_link = if MULTIUP_REGEX.is_match(&multiup_link) {
+            multiup_link
         } else {
-            String::new() // Same as before
+            let mut mirror_link = String::new();
+            for prefix in prefixes {
+                if let Some(suffix) = multiup_link.strip_prefix(prefix) {
+                    let mut fixed_link = format!("{}{}", mirror_prefix, suffix);
+                    if !MULTIUP_REGEX.is_match(&fixed_link) {
+                        fixed_link.push_str("/a");
+                    };
+                    mirror_link = fixed_link;
+                    break
+                }
+            };
+            mirror_link
         };
 
         if !fixed_link.is_empty() && !mirror_links.contains(&fixed_link) {
