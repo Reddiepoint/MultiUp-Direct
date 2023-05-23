@@ -91,7 +91,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
 
 }
 
-static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
+const SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
 async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
     // Regular links
     let mut links: Vec<DirectLink> = vec![];
@@ -112,7 +112,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
     links // Will be empty if invalid page
 }
 
-async fn get_html(url: &str, client: &Client) -> Result<String, reqwest::Error> {
+pub async fn get_html(url: &str, client: &Client) -> Result<String, reqwest::Error> {
     //client.get(url).await?.text().await
     client.get(url).send().await?.text().await
 }
