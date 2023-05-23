@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
 
-use crate::structs::hosts::{AvailableHostsResponse, LinkValidityResponse, Url};
+use crate::structs::hosts::{AvailableHostsResponse, LinkInformation, Url};
 
-pub async fn check_validity(url: &str) -> LinkValidityResponse {
+pub async fn check_validity(url: &str) -> LinkInformation {
     let client = reqwest::Client::new();
     let response = client.post("https://multiup.org/api/check-file")
         .form(&Url { link: url.to_string()})
-        .send().await.unwrap().json::<LinkValidityResponse>().await.unwrap();
+        .send().await.unwrap().json::<LinkInformation>().await.unwrap();
     response
 }
 

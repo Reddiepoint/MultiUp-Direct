@@ -8,11 +8,11 @@ use reqwest::{Client, Error};
 
 use crate::functions::filter::set_filter_hosts;
 use crate::functions::hosts::check_validity;
-use crate::structs::hosts::{DirectLink, LinkValidityResponse};
+use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
 
 static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
-pub fn fix_mirror_links(multiup_links: &str) -> Vec<String> {
+pub fn fix_multiup_links(multiup_links: &str) -> Vec<MirrorLink> {
     let mut mirror_links = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
     //let mut mirror_links = vec![];
     let mirror_prefix = "https://multiup.org/en/mirror/";
@@ -42,62 +42,53 @@ pub fn fix_mirror_links(multiup_links: &str) -> Vec<String> {
             mirror_links.push(fixed_link)
         }
     };
+    let mirror_links = mirror_links.iter().map(|link| MirrorLink::new(link.to_string())).collect();
     mirror_links
 }
 
-pub async fn generate_direct_links(links: Vec<String>, check_status: bool, number_of_links_tx: Sender<u8>, link_info_tx: Sender<Vec<LinkValidityResponse>>) -> (Vec<DirectLink>, Vec<(String, bool)>) {
-    let (tx, rx) = crossbeam_channel::unbounded();
-    let client = reqwest::Client::new();
-    for (order, link) in links.iter().enumerate() {
-        let tx = tx.clone();
-        let temp_link = link.clone();
+pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>) {
+    let client = Client::new();
+    let mut tasks = Vec::new();
+    for (order, link) in mirror_links.iter().enumerate() {
+        let direct_links_tx = direct_links_tx.clone();
+        let mut mirror_link = link.clone();
         let client = client.clone();
-        tokio::spawn(async move {
-            let generated_links = scrape_link(&temp_link, check_status, &client).await;
-            tx.send((order, generated_links)).unwrap();
-        });
-    }
-    drop(tx);
-
-    let mut direct_links: Vec<DirectLink> = vec![];
-    let mut unordered_links: Vec<(usize, (Vec<DirectLink>, Option<LinkValidityResponse>))> = vec![];
-    for (order, received_links) in rx {
-        let index = unordered_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
-        unordered_links.insert(index, (order, received_links));
-        let responses: Vec<LinkValidityResponse> = unordered_links.iter().filter_map(|(_, (_, response))| response.clone()).collect();
-        link_info_tx.send(responses);
-        number_of_links_tx.send(1);
+        tasks.push(tokio::spawn(async move {
+            let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client).await;
+            let _ = direct_links_tx.send((order, mirror_link));
+        }));
     }
 
-    for (_, (mut links, _)) in unordered_links {
-        // sort the links by name_host in place
-        links.sort_by_key(|link| link.name_host.clone());
-        direct_links.extend(links);
+    for task in tasks {
+        let _ = task.await;
     }
-
-    let filter_hosts = set_filter_hosts(&direct_links);
-
-    (direct_links, filter_hosts)
 }
 
 
 
-async fn scrape_link(mirror_link: &str, check_status: bool, client: &Client) -> (Vec<DirectLink>, Option<LinkValidityResponse>) {
-    let link_hosts = scrape_link_for_hosts(mirror_link, client).await;
+async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
+    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.is_empty() {
-        return (vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())], None);
+        mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
+        return mirror_link.clone()
     }
     if !check_status {
-        return (link_hosts, None);
+        mirror_link.direct_links = Some(link_hosts);
+        return mirror_link.clone();
     }
-    let hosts = check_validity(mirror_link).await;
-    (link_hosts.into_iter().map(|link| {
-        let status = match hosts.hosts.get(&link.name_host).unwrap() {
+    let link_information = check_validity(&mirror_link.url).await;
+    let mut direct_links: Vec<DirectLink> = link_hosts.into_iter().map(|link| {
+        let status = match link_information.hosts.get(&link.name_host).unwrap() {
             Some(validity) => validity,
             None => "unknown"
         };
         DirectLink::new(link.name_host, link.url, status.to_string())
-    }).collect(), Some(hosts))
+    }).collect();
+    direct_links.sort_by_key(|link| link.name_host.clone());
+    mirror_link.direct_links = Some(direct_links);
+    mirror_link.information = Some(link_information);
+    mirror_link.clone()
+
 }
 
 static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use eframe::egui::Link;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
@@ -18,13 +19,26 @@ impl DirectLink {
     }
 }
 
+/// Contains the fixed mirror link and possibly the generated direct links
+#[derive(Clone)]
 pub struct MirrorLink {
-    url: String,
-    direct_links: Option<Vec<DirectLink>>
+    pub url: String,
+    pub direct_links: Option<Vec<DirectLink>>,
+    pub information: Option<LinkInformation>
+}
+
+impl MirrorLink {
+    pub fn new(url: String) -> Self {
+        Self {
+            url,
+            direct_links: None,
+            information: None
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
-pub struct LinkValidityResponse {
+pub struct LinkInformation {
     error: String,
     pub file_name: String,
     pub size: String,
