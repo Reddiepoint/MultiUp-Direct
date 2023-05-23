@@ -4,7 +4,7 @@ use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use eframe::egui::Context;
 use once_cell::sync::Lazy;
-use scraper::{Node, Selector};
+use scraper::Selector;
 use std::cmp::Ordering;
 use std::string::ToString;
 use std::thread;

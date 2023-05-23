@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use eframe::egui::Link;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
@@ -39,7 +38,7 @@ impl MirrorLink {
 
 #[derive(Clone, Deserialize)]
 pub struct LinkInformation {
-    error: String,
+    _error: String,
     pub file_name: String,
     pub size: String,
     pub date_upload: String,
@@ -55,17 +54,17 @@ pub struct Url {
     pub link: String
 }
 
-#[derive(Deserialize)]
-pub struct HostInfo {
-    selected: String,
-    size: u32,
-}
-
-#[derive(Deserialize)]
-pub struct AvailableHostsResponse {
-    error: String,
-    pub hosts: HashMap<String, HostInfo>,
-    default: Vec<String>,
-    #[serde(rename = "maxHosts")]
-    max_hosts: u32,
-}
+//#[derive(Deserialize)]
+//pub struct HostInfo {
+//    selected: String,
+//    size: u32,
+//}
+//
+//#[derive(Deserialize)]
+//pub struct AvailableHostsResponse {
+//    error: String,
+//    pub hosts: HashMap<String, HostInfo>,
+//    default: Vec<String>,
+//    #[serde(rename = "maxHosts")]
+//    max_hosts: u32,
+//}
