@@ -1,14 +1,8 @@
-use std::collections::BTreeMap;
-use std::sync::mpsc;
-use crossbeam_channel::{Sender, SendError};
-use eframe::egui::Key::P;
-use eframe::egui::TextBuffer;
+use crossbeam_channel::{Sender};
 use once_cell::sync::Lazy;
-use reqwest::{Client, Error};
-
-use crate::functions::filter::set_filter_hosts;
+use reqwest::{Client};
 use crate::functions::hosts::check_validity;
-use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
+use crate::structs::hosts::{DirectLink, MirrorLink};
 
 static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
@@ -91,7 +85,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
 
 }
 
-const SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
+static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
 async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
     // Regular links
     let mut links: Vec<DirectLink> = vec![];

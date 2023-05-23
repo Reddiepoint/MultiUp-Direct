@@ -260,8 +260,12 @@ impl Download {
                             //    self.selection_indices.1 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
                             //};
 
-                            if link_label.clicked() && control_is_down && !selected_links.remove(link.as_str()) {
-                                selected_links.insert(link);
+                            if link_label.clicked() && control_is_down {
+                                if !selected_links.remove(link.as_str()) {
+                                    selected_links.insert(link);
+                                };
+                                self.selection_indices = (None, None);
+
                             } else if link_label.clicked() && shift_is_down {
                                 if self.selection_indices.0.is_none() {
                                     self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap());

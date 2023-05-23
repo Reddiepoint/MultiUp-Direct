@@ -10,7 +10,7 @@ pub struct Application {
     panel: Panel,
     download: Download,
     //upload: Upload,
-    show_help: bool,
+    help: Help,
 }
 
 #[derive(Default, PartialEq)]
@@ -38,17 +38,17 @@ impl eframe::App for Application {
                 menu::bar(ui, |ui| {
                     ui.menu_button("Help", |ui| {
                         if ui.button("Show help").clicked() {
-                            self.show_help = true;
+                            self.help.show_help = true;
                             ui.close_menu();
                         };
 
-                        if ui.button("Changelog").clicked() {
-
-                        }
-
                         ui.separator();
-                        if ui.button("Check for updates").clicked() {
 
+                        if ui.button("Check for updates").clicked() {
+                            let (tx, rx) = crossbeam_channel::unbounded();
+                            (self.help.update_sender, self.help.update_receiver) = (Some(tx), Some(rx));
+                            self.help.show_update = true;
+                            ui.close_menu();
                         }
 
                         ui.label(format!("Version {}", VERSION))
@@ -70,8 +70,12 @@ impl eframe::App for Application {
                 //Panel::Settings => Settings::show(ui),
             };
 
-            if self.show_help {
-                Help::show_help(ctx, &mut self.show_help);
+            if self.help.show_help {
+                Help::show_help(ctx, &mut self.help.show_help);
+            }
+
+            if self.help.show_update {
+                Help::show_update(ctx, &mut self.help);
             }
         });
     }
