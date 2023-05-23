@@ -238,27 +238,6 @@ impl Download {
                                 ui.modifiers.shift
                             });
 
-                            //if link_label.clicked() && control_is_down {
-                            //    //if selected_links.contains(link.as_str()) {
-                            //    //    selected_links.remove(link.as_str());
-                            //    //} else {
-                            //    //    selected_links.insert(link);
-                            //    //}
-                            //    if !selected_links.remove(link.as_str()) {
-                            //        selected_links.insert(link);
-                            //    }
-                            //} else if link_label.clicked() && shift_is_down {
-                            //    if self.selection_indices.0 == 0 {
-                            //        self.selection_indices.0 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
-                            //        self.selection_indices.1 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
-                            //    } else {
-                            //        self.selection_indices.1 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
-                            //    };
-                            //} else if link_label.clicked() {
-                            //    self.selection_indices.0 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
-                            //    self.selection_indices.1 = self.display_links.iter().position(|url| url == link).unwrap() + 1;
-                            //};
-
                             if link_label.clicked() && control_is_down {
                                 if !selected_links.remove(link.as_str()) {
                                     selected_links.insert(link);

@@ -38,7 +38,7 @@ impl MirrorLink {
 
 #[derive(Clone, Deserialize)]
 pub struct LinkInformation {
-    _error: String,
+    error: String,
     pub file_name: String,
     pub size: String,
     pub date_upload: String,

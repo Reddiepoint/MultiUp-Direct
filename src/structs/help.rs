@@ -31,6 +31,11 @@ pub struct Help {
 static VERSION_SELECTOR: Lazy<Selector> = Lazy::new(|| {
     Selector::parse(r#"#pagecontent > table:nth-child(3) > tbody > tr:nth-child(3) > td:nth-child(2) > table > tbody > tr > td > div > span:nth-child(22) > span"#).unwrap()
 });
+
+static CHANGELOG_SELECTOR: Lazy<Selector> = Lazy::new(|| {
+    Selector::parse(r#"#pagecontent > table:nth-child(3) > tbody > tr:nth-child(3) > td:nth-child(2) > table > tbody > tr > td > div > ul:nth-child(29)"#).unwrap()
+});
+
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 impl Help {
     pub fn show_help(ctx: &Context, open: &mut bool) {
@@ -59,7 +64,7 @@ impl Help {
 
                 if !changelog_text.is_empty() {
                     ui.separator();
-                    ui.heading(format!("What's new in {}", help.latest_version));
+                    ui.heading(format!("What's new in v{}", help.latest_version));
                     ui.label(changelog_text);
                 }
 
@@ -104,25 +109,23 @@ impl Help {
                 let website_html = get_html(HOMEPAGE, &client).await.unwrap();
                 let website_html = scraper::Html::parse_document(&website_html);
                 let latest_version = website_html.select(&VERSION_SELECTOR).next().unwrap();
-
-                let selector = Selector::parse(r#"#pagecontent > table:nth-child(3) > tbody > tr:nth-child(3) > td:nth-child(2) > table > tbody > tr > td > div > ul:nth-child(31)"#).unwrap();
-                let element = website_html.select(&selector).next().unwrap();
+                let changelog = website_html.select(&CHANGELOG_SELECTOR).next().unwrap();
 
                 let mut changelog_children = vec![];
-                let mut changelog = vec![];
-                for child in element.children() {
+                let mut changelog_points = vec![];
+                for child in changelog.children() {
                     changelog_children.push(child);
                 }
 
                 while let Some(node) = changelog_children.pop() {
                     if let Some(text) = node.value().as_text() {
-                        changelog.push(text.trim().to_string());
+                        changelog_points.push(text.trim().to_string());
                     }
                     for child in node.children() {
                         changelog_children.push(child);
                     }
                 };
-                let mut changelog: Vec<String> = changelog.iter_mut().filter(|text| !text.is_empty()).map(|text| text.to_string()).collect();
+                let mut changelog: Vec<String> = changelog_points.iter_mut().filter(|text| !text.is_empty()).map(|text| text.to_string()).collect();
                 changelog.reverse();
                 let _ = tx.send((latest_version.inner_html()[1..].to_string(), changelog));
             });
