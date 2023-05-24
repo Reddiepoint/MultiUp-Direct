@@ -224,34 +224,45 @@ impl Download {
                             };
                         };
 
+                        let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+
                         for link in self.display_links.iter() {
                             let link_label = ui.add(Label::new(link).sense(Sense::click()));
                             if link_label.hovered() || self.selected_links.contains(link) {
                                 link_label.clone().highlight();
                             };
 
-                            let control_is_down = ui.ctx().input(|ui| {
-                                ui.modifiers.ctrl
-                            });
+                            //if link_label.clicked() && control_is_down {
+                            //    if !selected_links.remove(link.as_str()) {
+                            //        selected_links.insert(link);
+                            //    };
+                            //    self.selection_indices = (None, None);
+                            //
+                            //} else if link_label.clicked() && shift_is_down {
+                            //    if self.selection_indices.0.is_none() {
+                            //        self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                            //    } else {
+                            //        self.selection_indices.1 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                            //    };
+                            //} else if link_label.clicked() {
+                            //    self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap())
+                            //};
 
-                            let shift_is_down = ui.ctx().input(|ui| {
-                                ui.modifiers.shift
-                            });
-
-                            if link_label.clicked() && control_is_down {
-                                if !selected_links.remove(link.as_str()) {
-                                    selected_links.insert(link);
-                                };
-                                self.selection_indices = (None, None);
-
-                            } else if link_label.clicked() && shift_is_down {
-                                if self.selection_indices.0.is_none() {
-                                    self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                            if link_label.clicked() {
+                                if control_is_down {
+                                    if !selected_links.remove(link.as_str()) {
+                                        selected_links.insert(link);
+                                    };
+                                    self.selection_indices = (None, None);
+                                } else if shift_is_down {
+                                    if self.selection_indices.0.is_none() {
+                                        self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                                    } else {
+                                        self.selection_indices.1 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                                    };
                                 } else {
-                                    self.selection_indices.1 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                                    self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap())
                                 };
-                            } else if link_label.clicked() {
-                                self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap())
                             };
 
                             if self.selection_indices.0 > self.selection_indices.1 && self.selection_indices.1.is_some() {
