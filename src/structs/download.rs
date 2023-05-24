@@ -265,7 +265,7 @@ impl Download {
                                 };
                             };
 
-                            if self.selection_indices.0 > self.selection_indices.1 && self.selection_indices.1.is_some() {
+                            if self.selection_indices.1.is_some() && self.selection_indices.0 > self.selection_indices.1 {
                                 (self.selection_indices.0, self.selection_indices.1) = (self.selection_indices.1, self.selection_indices.0)
                             };
 
