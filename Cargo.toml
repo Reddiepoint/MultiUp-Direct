@@ -1,6 +1,6 @@
 [package]
-name = "MultiUp_Direct_2_0_1"
-version = "2.0.1"
+name = "MultiUp_Direct_2_2_0"
+version = "2.2.0"
 authors = ["Redpoint"]
 edition = "2021"
 
@@ -13,7 +13,7 @@ codegen-units = 1
 
 [dependencies]
 crossbeam-channel = "0.5.8"
-eframe = { version = "0.21.3" }
+eframe = { version = "0.22.0" }
 once_cell = "1.17.1"
 reqwest = { version = "0.11.16", features = ["json", "multipart", "stream"] }
 regex = "1.8.1"
@@ -26,7 +26,7 @@ webbrowser = "0.8.9"
 
 
 [dev-dependencies]
-criterion = "0.4.0"
+criterion = "0.5.1"
 
 [[bench]]
 name = "benchmark"

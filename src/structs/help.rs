@@ -4,7 +4,7 @@ use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use eframe::egui::Context;
 use once_cell::sync::Lazy;
-use scraper::Selector;
+use scraper::{Element, Selector};
 use std::cmp::Ordering;
 use std::string::ToString;
 use std::thread;
@@ -26,17 +26,24 @@ pub struct Help {
     pub update_status: UpdateStatus,
     pub latest_changelog: Vec<String>,
     pub latest_version: String,
+    pub link_to_latest_version: String
 }
 
+
 static VERSION_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    Selector::parse(r#"#pagecontent > table:nth-child(3) > tbody > tr:nth-child(3) > td:nth-child(2) > table > tbody > tr > td > div > span:nth-child(22) > span"#).unwrap()
+    Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap()
 });
 
+static LINK_SELECTOR: Lazy<Selector> = Lazy::new(|| {
+    Selector::parse(r#"a:contains("Download it here")"#).unwrap()
+});
 static CHANGELOG_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    Selector::parse(r#"#pagecontent > table:nth-child(3) > tbody > tr:nth-child(3) > td:nth-child(2) > table > tbody > tr > td > div > ul:nth-child(29)"#).unwrap()
+    Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap()
 });
 
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
+
+
 impl Help {
     pub fn show_help(ctx: &Context, open: &mut bool) {
         egui::Window::new("Help")
@@ -48,15 +55,23 @@ impl Help {
         egui::Window::new("Updates")
             .open(&mut help.show_update)
             .show(ctx, |ui| {
-                ui.heading({
-                    match help.update_status {
-                        UpdateStatus::NotChecked => "Checking for updates...",
-                        UpdateStatus::Checking => "Checking for updates...",
-                        UpdateStatus::NotLatest => "There is an update available!",
-                        UpdateStatus::SameVersion => "You are up-to-date!",
-                    }
+                ui.horizontal(|ui| {
+                    ui.heading({
+                        match help.update_status {
+                            UpdateStatus::NotChecked => "Checking for updates...",
+                            UpdateStatus::Checking => "Checking for updates...",
+                            UpdateStatus::NotLatest => "There is an update available!",
+                            UpdateStatus::SameVersion => "You are up-to-date!",
+                        }
+                    });
+
+                    if let UpdateStatus::Checking = help.update_status {
+                        ui.spinner();
+                    };
                 });
-                ui.hyperlink_to("Homepage", &HOMEPAGE);
+
+
+                ui.hyperlink_to("Homepage", HOMEPAGE);
                 let mut changelog_text = String::new();
                 for change in help.latest_changelog.iter() {
                     changelog_text.push_str(&format!("- {}\n", change));
@@ -109,8 +124,11 @@ impl Help {
                 let website_html = get_html(HOMEPAGE, &client).await.unwrap();
                 let website_html = scraper::Html::parse_document(&website_html);
                 let latest_version = website_html.select(&VERSION_SELECTOR).next().unwrap();
-                let changelog = website_html.select(&CHANGELOG_SELECTOR).next().unwrap();
-
+                let changelog = website_html.select(&CHANGELOG_SELECTOR)
+                    .find(|element| element.text().collect::<Vec<_>>().join("") == "Changelog").unwrap()
+                    .parent_element().unwrap()
+                    .next_sibling_element().unwrap()
+                    .next_sibling_element().unwrap();
                 let mut changelog_children = vec![];
                 let mut changelog_points = vec![];
                 for child in changelog.children() {
