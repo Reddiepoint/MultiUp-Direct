@@ -2,9 +2,10 @@ use crossbeam_channel::{Sender};
 use once_cell::sync::Lazy;
 use reqwest::{Client};
 use crate::functions::hosts::check_validity;
-use crate::structs::hosts::{DirectLink, MirrorLink};
+use crate::structs::download::ParsedTitle;
+use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
 
-static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^https://multiup\.org/en/mirror/[^/]+/[^/]+$").unwrap());
+static MULTIUP_REGEX: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/[^/]+/[^/]+$"#).unwrap());
 /// Convert short and long links to the en/mirror page. Removes duplicates
 pub fn fix_multiup_links(multiup_links: &str) -> Vec<MirrorLink> {
     let mut mirror_links = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
@@ -14,7 +15,7 @@ pub fn fix_multiup_links(multiup_links: &str) -> Vec<MirrorLink> {
         let multiup_link = line.trim().split(' ').next().unwrap();
         let multiup_link = multiup_link.replace("www.", ""); // Compatibility for older links
 
-        let prefixes = ["https://multiup.org/download/", "https://multiup.org/en/download/", "https://multiup.org/"];
+        let prefixes = ["https://multiup.org/download/", "http://multiup.org/download/", "https://multiup.org/en/download/", "https://multiup.org/"];
         let fixed_link = if MULTIUP_REGEX.is_match(&multiup_link) {
             multiup_link
         } else {
@@ -62,16 +63,38 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
     let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
-    if link_hosts.is_empty() {
+    if link_hosts.1.is_empty() {
         mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
         return mirror_link.clone()
     }
     if !check_status {
-        mirror_link.direct_links = Some(link_hosts);
+        mirror_link.direct_links = Some(link_hosts.1);
+        let mut parsed_title = link_hosts.0;
+        if parsed_title.unit.to_lowercase() == "kb" {
+            parsed_title.size *= 1024.0;
+            parsed_title.size = parsed_title.size.floor();
+        } else if parsed_title.unit.to_lowercase() == "mb" {
+            parsed_title.size *= 1048576.0;
+            parsed_title.size = parsed_title.size.floor();
+        } else if parsed_title.unit.to_lowercase() == "gb" {
+            parsed_title.size *= 1073741824.0;
+            parsed_title.size = parsed_title.size.floor();
+        }
+        mirror_link.information = Some(LinkInformation {
+            error: "success".to_string(),
+            file_name: parsed_title.file_name,
+            size: parsed_title.size.to_string(),
+            date_upload: "".to_string(),
+            time_upload: 0,
+            date_last_download: "N/A".to_string(),
+            number_downloads: 0,
+            description: None,
+            hosts: Default::default(),
+        });
         return mirror_link.clone();
     }
     let link_information = check_validity(&mirror_link.url).await;
-    let mut direct_links: Vec<DirectLink> = link_hosts.into_iter().map(|link| {
+    let mut direct_links: Vec<DirectLink> = link_hosts.1.into_iter().map(|link| {
         let status = match link_information.hosts.get(&link.name_host).unwrap() {
             Some(validity) => validity,
             None => "unknown"
@@ -86,13 +109,14 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
 }
 
 static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
-async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
+static FILENAME_SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
+async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<DirectLink>) {
     // Regular links
     let mut links: Vec<DirectLink> = vec![];
     // Scrape panel
     let website_html = match get_html(url, client).await {
         Ok(html) => html,
-        Err(error) => return vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())]
+        Err(error) => return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())])
     };
 
     let website_html = scraper::Html::parse_document(&website_html);
@@ -102,8 +126,23 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> Vec<DirectLink> {
         let validity = element.value().attr("validity").unwrap();
         links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
     };
+    let mirror_title = website_html.select(&FILENAME_SELECTOR).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
+    let title_stuff = parse_title(&mirror_title);
 
-    links // Will be empty if invalid page
+    (title_stuff, links) // Will be empty if invalid page
+}
+
+fn parse_title(input: &str) -> ParsedTitle {
+    let input = input.trim();
+    let parts: Vec<&str> = input.split_whitespace().collect();
+    if parts.len() >= 3 {
+        let file_name = parts[3..parts.len() - 4].join(" ");
+        let size = parts[parts.len() - 3].parse::<f64>().unwrap_or(0.0);
+        let unit = parts[parts.len() - 2];
+        ParsedTitle::new(file_name, size, unit.to_string())
+    } else {
+        ParsedTitle::new(String::new(), 0.0, String::new())
+    }
 }
 
 pub async fn get_html(url: &str, client: &Client) -> Result<String, reqwest::Error> {

@@ -1,6 +1,6 @@
 [package]
-name = "MultiUp_Direct_2_2_0"
-version = "2.2.0"
+name = "MultiUp_Direct_2_1_1"
+version = "2.1.1"
 authors = ["Redpoint"]
 edition = "2021"
 
@@ -12,6 +12,7 @@ codegen-units = 1
 
 
 [dependencies]
+async-recursion = "1.0.4"
 crossbeam-channel = "0.5.8"
 eframe = { version = "0.22.0" }
 once_cell = "1.17.1"

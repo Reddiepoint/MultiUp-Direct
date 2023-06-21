@@ -3,9 +3,9 @@ use crate::functions::filter::{filter_links, set_filter_hosts};
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
 use crossbeam_channel::Receiver;
-use eframe::egui::{Button, Label, ScrollArea, Sense, TextEdit, Ui};
+use eframe::egui::{Button, Checkbox, Label, Link, RichText, ScrollArea, Sense, TextEdit, Ui};
 use std::collections::HashSet;
-use std::thread;
+use std::{mem, thread};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
@@ -30,9 +30,8 @@ impl Receivers {
 #[derive(Default)]
 pub struct Download {
     multiup_links: String,
-    mirror_links: Vec<(usize, MirrorLink)>,
+    mirror_links: Vec<(usize, MirrorLink, bool)>,
     recheck_status: bool,
-    link_information: Vec<LinkInformation>,
     total_number_of_links: usize,
     number_of_processed_links: usize,
     generating: bool,
@@ -40,8 +39,8 @@ pub struct Download {
     timer: Option<Instant>,
     time_elapsed: u128,
     direct_links: Vec<DirectLink>,
-    display_links: Vec<String>,
     selection_indices: (Option<usize>, Option<usize>),
+    info_indices: (Option<usize>, Option<usize>),
     selected_links: Vec<String>,
     receivers: Receivers,
     filter_menu: FilterMenu,
@@ -75,40 +74,92 @@ impl Download {
 
             let height = ui.available_height() / 2.0; // Remaining height after input box to fill a quarter the window
 
-            if !self.link_information.is_empty() {
+            let mut link_information: Vec<(Option<LinkInformation>, &mut bool)> = self.mirror_links.iter_mut()
+                .map(|(_order, mirror_link, selected)| (mirror_link.information.clone(), selected))
+                .collect();
+
+            let mut selection = -1;
+            if !link_information.is_empty() && link_information[0].0.is_some() {
                 ui.collapsing("Link Information", |ui| {
                     ScrollArea::vertical()
                         .id_source("Link Information")
                         .min_scrolled_height(height)
                         .show(ui, |ui| {
-                            for file in self.link_information.iter() {
-                                ui.label({
-                                    match &file.description {
-                                        Some(description) => {
-                                            format!("{} | {} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
-                                                    file.file_name,
-                                                    description,
-                                                    file.size,
-                                                    file.date_upload,
-                                                    file.time_upload,
-                                                    file.number_downloads,
-                                            )
-                                        },
-                                        None => {
-                                            format!("{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
-                                                    file.file_name,
-                                                    file.size,
-                                                    file.date_upload,
-                                                    file.time_upload,
-                                                    file.number_downloads,
-                                            )
+                            for i in 0..link_information.len() {
+                                let file = link_information[i].0.clone().unwrap();
+                                ui.horizontal(|ui| {
+                                    let selected = &mut link_information[i].1;
+                                    let checkbox = ui.add(Checkbox::new(selected, ""));
+                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                    if shift_is_down && checkbox.clicked() {
+                                        if self.info_indices.0.is_none() {
+                                            self.info_indices.0 = Some(i);
+                                        } else {
+                                            self.info_indices.1 = Some(i);
                                         }
+                                    } else if checkbox.clicked() {
+                                        self.info_indices.0 = Some(i);
                                     }
+                                    checkbox.context_menu(|ui| {
+                                        if ui.button("Select all").clicked() {
+                                            selection = 1;
+                                            ui.close_menu();
+                                        } else if ui.button("Deselect all").clicked() {
+                                            selection = 0;
+                                            ui.close_menu();
+                                        }
+                                    });
+                                    ui.label({
+                                        match &file.description {
+                                            Some(description) => {
+                                                format!("{} | {} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                                                        file.file_name,
+                                                        description,
+                                                        file.size,
+                                                        file.date_upload,
+                                                        file.time_upload,
+                                                        file.number_downloads,
+                                                )
+                                            },
+                                            None => {
+                                                format!("{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                                                        file.file_name,
+                                                        file.size,
+                                                        file.date_upload,
+                                                        file.time_upload,
+                                                        file.number_downloads,
+                                                )
+                                            }
+                                        }
+                                    });
                                 });
                             }
+
                         });
                 });
             };
+
+            if selection == 0 {
+                for i in self.mirror_links.iter_mut() {
+                    i.2 = false;
+                }
+            } else if selection == 1 {
+                for i in self.mirror_links.iter_mut() {
+                    i.2 = true;
+                }
+            }
+            if self.info_indices.0.is_some() && self.info_indices.1.is_some() {
+                if self.info_indices.0.unwrap() > self.info_indices.1.unwrap() {
+                    (self.info_indices.0, self.info_indices.1) = (self.info_indices.1, self.info_indices.0);
+                }
+                for (i, j) in self.mirror_links.iter_mut().enumerate() {
+                    if i >= self.info_indices.0.unwrap() && i <= self.info_indices.1.unwrap() {
+                        j.2 = true;
+                    }
+                };
+                self.info_indices.0.take();
+                self.info_indices.1.take();
+            }
         });
     }
 
@@ -186,20 +237,18 @@ impl Download {
 
                 if let Some(rx) = &self.receivers.direct_links {
                     while let Ok((order, mirror_link)) = rx.try_recv() {
-                        let index = self.mirror_links.binary_search_by_key(&order, |&(o, _)| o).unwrap_or_else(|x| x);
-                        self.mirror_links.insert(index, (order, mirror_link));
+                        let index = self.mirror_links.binary_search_by_key(&order, |&(o, _, _)| o).unwrap_or_else(|x| x);
+                        self.mirror_links.insert(index, (order, mirror_link, true));
 
                         self.number_of_processed_links = self.mirror_links.len();
                         let mut link_information = vec![];
-                        for (_, mirror_link) in self.mirror_links.iter() {
+                        for (_, mirror_link, _) in self.mirror_links.iter() {
                             if let Some(information) = mirror_link.information.clone() {
                                 link_information.push(information);
                             };
                         }
 
-                        self.link_information = link_information;
-
-                        let direct_links: Vec<DirectLink> = self.mirror_links.iter().filter_map(|(_order, mirror_link)| mirror_link.direct_links.clone()).flatten().collect();
+                        let direct_links: Vec<DirectLink> = self.mirror_links.iter().filter_map(|(_, mirror_link, _)| mirror_link.direct_links.clone()).flatten().collect();
                         self.direct_links = direct_links;
                         self.filter_menu.hosts = set_filter_hosts(&self.direct_links);
                     };
@@ -220,7 +269,17 @@ impl Download {
     }
 
     fn display_links_ui(&mut self, ui: &mut Ui) {
-        self.display_links = filter_links(&self.direct_links, &self.filter_menu);
+        let direct_links: Vec<DirectLink> = self.mirror_links.iter_mut().filter_map(|(_order, mirror_link, displayed)| {
+            for direct_links in mirror_link.direct_links.iter_mut() {
+                for link in direct_links {
+                    link.displayed = *displayed;
+                }
+            }
+            mirror_link.direct_links.clone()
+        }).flatten().collect();
+        self.direct_links = direct_links;
+        //self.display_links = filter_links(&self.direct_links, &self.filter_menu);
+        let display_links = filter_links(&self.direct_links, &self.filter_menu);
         let height = ui.available_height();
         ui.horizontal(|ui| {
             ui.set_height(height);
@@ -233,14 +292,14 @@ impl Download {
                         let mut selected_links: HashSet<&str> = self.selected_links.iter().map(|url| url.as_str()).collect();
                         // If a selected link is being filtered out, it will be unselected
                         for link in self.selected_links.iter() {
-                            if !self.display_links.contains(link) {
+                            if !display_links.iter().any(|(_, l)| l.as_str() == link) {
                                 selected_links.remove(link.as_str());
                             };
                         };
 
                         let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
 
-                        for link in self.display_links.iter() {
+                        for (_, link) in display_links.iter() {
                             let link_label = ui.add(Label::new(link).sense(Sense::click()));
                             if link_label.hovered() || self.selected_links.contains(link) {
                                 link_label.clone().highlight();
@@ -254,12 +313,12 @@ impl Download {
                                     self.selection_indices = (None, None);
                                 } else if shift_is_down {
                                     if self.selection_indices.0.is_none() {
-                                        self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                                        self.selection_indices.0 = Some(display_links.iter().position(|(_, url)| url == link).unwrap());
                                     } else {
-                                        self.selection_indices.1 = Some(self.display_links.iter().position(|url| url == link).unwrap());
+                                        self.selection_indices.1 = Some(display_links.iter().position(|(_, url)| url == link).unwrap());
                                     };
                                 } else {
-                                    self.selection_indices.0 = Some(self.display_links.iter().position(|url| url == link).unwrap())
+                                    self.selection_indices.0 = Some(display_links.iter().position(|(_, url)| url == link).unwrap())
                                 };
                             };
 
@@ -268,7 +327,7 @@ impl Download {
                             };
 
                             if let (Some(index_1), Some(index_2)) = self.selection_indices {
-                                self.display_links[index_1..=index_2].iter().for_each(|link| { selected_links.insert(link); });
+                                display_links[index_1..=index_2].iter().for_each(|(_, link)| { selected_links.insert(link); });
                                 if ui.ctx().input(|ui| !ui.modifiers.shift) {
                                     self.selection_indices = (None, None);
                                 };
@@ -286,7 +345,8 @@ impl Download {
                                 };
 
                                 if ui.button("Copy all links").clicked() {
-                                    ui.output_mut(|output| output.copied_text = self.display_links.join("\n"));
+                                    let urls = display_links.iter().map(|(_, url)| url.clone()).collect::<Vec<String>>();
+                                    ui.output_mut(|output| output.copied_text = urls.join("\n"));
                                     ui.close_menu();
                                 };
 
@@ -305,7 +365,7 @@ impl Download {
                                 };
 
                                 if ui.button("Open all links in browser").clicked() {
-                                    for link in self.display_links.iter() {
+                                    for (_, link) in display_links.iter() {
                                         let _ = webbrowser::open(link);
                                     }
                                     ui.close_menu();
@@ -326,5 +386,22 @@ impl Download {
             });
             FilterMenu::show(ui, &mut self.filter_menu);
         });
+    }
+}
+
+
+pub struct ParsedTitle {
+    pub file_name: String,
+    pub size: f64,
+    pub unit: String,
+}
+
+impl ParsedTitle {
+    pub fn new(file_name: String, size: f64, unit: String) -> Self {
+        ParsedTitle {
+            file_name,
+            size,
+            unit
+        }
     }
 }

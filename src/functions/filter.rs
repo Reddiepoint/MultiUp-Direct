@@ -2,9 +2,10 @@
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::DirectLink;
 
-pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<String> {
+pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<(bool, String)> {
     links
         .iter()
+        .filter(|link| link.displayed)
         .filter(|link| match link.validity.as_str() {
             "valid" => filter.valid,
             "invalid" => filter.invalid,
@@ -15,7 +16,7 @@ pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<String> {
             filter.hosts.iter().any(|(host_name, selected)| *selected && &link.name_host == host_name)
         })
         .map(|link| {
-            link.url.to_string() })
+            (link.displayed, link.url.to_string()) })
         .collect()
 }
 

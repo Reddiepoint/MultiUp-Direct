@@ -6,6 +6,7 @@ pub struct DirectLink {
     pub name_host: String,
     pub url: String,
     pub validity: String,
+    pub displayed: bool
 }
 
 impl DirectLink {
@@ -13,7 +14,8 @@ impl DirectLink {
         DirectLink {
             name_host,
             url,
-            validity
+            validity,
+            displayed: false
         }
     }
 }
@@ -38,7 +40,7 @@ impl MirrorLink {
 
 #[derive(Clone, Deserialize)]
 pub struct LinkInformation {
-    error: String,
+    pub error: String,
     pub file_name: String,
     pub size: String,
     pub date_upload: String,
