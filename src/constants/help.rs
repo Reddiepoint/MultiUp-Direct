@@ -33,6 +33,7 @@ This means you can paste a page with links (e.g., FitGirl). \
 Duplicate links will also be filtered out.\n\n\
 2. You can check the \"Re-check host status\" box if you want MultiUp to verify the availability of the hosts.\n\
 This will give you more information about the files, which will appear in a section called \"Link Information\".\n\
+The information about the files retrieved without this feature enabled is much more limited.\n\
 Note that enabling this feature will cause the generation times to be much longer.\n\n\
 3. Click on \"Generate links\" to get the direct links.\n\
 You can see the progress of the generation in the status below the box.\n\n\
@@ -43,6 +44,9 @@ You can see the progress of the generation in the status below the box.\n\n\
 6. Use the filter menu to narrow down your choices:\n\t\
 - \"Unknown\": These are the links that MultiUp could not check after verification.\n\t\
 - \"Unchecked\": These are the links that were not verified by MultiUp. (Links will only appear here if you do not check the \"Re-check host status\" box).\n\t\
-- Hosts: You can choose which hosts you want to see links for. You can right-click on a host and select \"Select ____ links only\" to quickly filter out the rest.";
+- Hosts: You can choose which hosts you want to see links for. You can right-click on a host and select \"Select ____ links only\" to quickly filter out the rest.\n\n\
+7. You can choose to hide direct links associated with a MultiUp link by deselecting it in \"Link Information\"\n\
+Like the filter menu, you can right-click on a checkbox to see the context menu to select or deselect all the links, \
+and you can use SHIFT to select a range of links to display.";
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");

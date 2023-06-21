@@ -8,7 +8,7 @@ pub async fn check_validity(url: &str) -> LinkInformation {
         .form(&Url { link: url.to_string()})
         .send().await.unwrap().json::<LinkInformation>().await {
         Ok(information) => information,
-        Err(error) => {
+        Err(_error) => {
             check_validity(url).await
         }
     }

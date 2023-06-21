@@ -2,7 +2,7 @@ use crate::constants::help::{HELP_MESSAGE, VERSION};
 use crate::functions::download::get_html;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use eframe::egui::Context;
+use eframe::egui::{Context, ScrollArea};
 use once_cell::sync::Lazy;
 use scraper::{Element, Selector};
 use std::cmp::Ordering;
@@ -34,9 +34,6 @@ static VERSION_SELECTOR: Lazy<Selector> = Lazy::new(|| {
     Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap()
 });
 
-static LINK_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    Selector::parse(r#"a:contains("Download it here")"#).unwrap()
-});
 static CHANGELOG_SELECTOR: Lazy<Selector> = Lazy::new(|| {
     Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap()
 });
@@ -48,7 +45,9 @@ impl Help {
     pub fn show_help(ctx: &Context, open: &mut bool) {
         egui::Window::new("Help")
             .open(open)
-            .show(ctx, |ui| ui.label(HELP_MESSAGE));
+            .show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
+                ui.label(HELP_MESSAGE);
+            }));
     }
 
     pub fn show_update(ctx: &Context, help: &mut Help) {

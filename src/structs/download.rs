@@ -3,9 +3,9 @@ use crate::functions::filter::{filter_links, set_filter_hosts};
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
 use crossbeam_channel::Receiver;
-use eframe::egui::{Button, Checkbox, Label, Link, RichText, ScrollArea, Sense, TextEdit, Ui};
+use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
 use std::collections::HashSet;
-use std::{mem, thread};
+use std::thread;
 use std::time::Instant;
 use tokio::runtime::Runtime;
 
@@ -90,7 +90,7 @@ impl Download {
                                 ui.horizontal(|ui| {
                                     let selected = &mut link_information[i].1;
                                     let checkbox = ui.add(Checkbox::new(selected, ""));
-                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                    let shift_is_down = ui.ctx().input(|ui| ui.modifiers.shift);
                                     if shift_is_down && checkbox.clicked() {
                                         if self.info_indices.0.is_none() {
                                             self.info_indices.0 = Some(i);
