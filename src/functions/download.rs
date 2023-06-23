@@ -62,12 +62,13 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
 
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
-    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
+    let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.1.is_empty() {
         mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
         return mirror_link.clone()
     }
     if !check_status {
+        link_hosts.1.sort_by_key(|link| link.name_host.clone());
         mirror_link.direct_links = Some(link_hosts.1);
         let mut parsed_title = link_hosts.0;
         if parsed_title.unit.to_lowercase() == "kb" {
@@ -105,7 +106,6 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     mirror_link.direct_links = Some(direct_links);
     mirror_link.information = Some(link_information);
     mirror_link.clone()
-
 }
 
 static SELECTOR: Lazy<scraper::Selector> = Lazy::new(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());

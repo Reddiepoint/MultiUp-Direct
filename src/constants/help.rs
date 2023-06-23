@@ -45,7 +45,7 @@ You can see the progress of the generation in the status below the box.\n\n\
 - \"Unknown\": These are the links that MultiUp could not check after verification.\n\t\
 - \"Unchecked\": These are the links that were not verified by MultiUp. (Links will only appear here if you do not check the \"Re-check host status\" box).\n\t\
 - Hosts: You can choose which hosts you want to see links for. You can right-click on a host and select \"Select ____ links only\" to quickly filter out the rest.\n\n\
-7. You can choose to hide direct links associated with a MultiUp link by deselecting it in \"Link Information\"\n\
+7. You can choose to hide direct links associated with a MultiUp link by deselecting it in \"Link Information\".\n\
 Like the filter menu, you can right-click on a checkbox to see the context menu to select or deselect all the links, \
 and you can use SHIFT to select a range of links to display.";
 
