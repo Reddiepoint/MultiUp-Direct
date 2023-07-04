@@ -59,8 +59,6 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
     }
 }
 
-
-
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
     let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.1.is_empty() {
@@ -71,16 +69,13 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
         link_hosts.1.sort_by_key(|link| link.name_host.clone());
         mirror_link.direct_links = Some(link_hosts.1);
         let mut parsed_title = link_hosts.0;
-        if parsed_title.unit.to_lowercase() == "kb" {
-            parsed_title.size *= 1024.0;
-            parsed_title.size = parsed_title.size.floor();
-        } else if parsed_title.unit.to_lowercase() == "mb" {
-            parsed_title.size *= 1048576.0;
-            parsed_title.size = parsed_title.size.floor();
-        } else if parsed_title.unit.to_lowercase() == "gb" {
-            parsed_title.size *= 1073741824.0;
-            parsed_title.size = parsed_title.size.floor();
-        }
+        match parsed_title.unit.to_lowercase().as_str() {
+            "kb" => parsed_title.size *= 1024.0,
+            "mb" => parsed_title.size *= 1048576.0,
+            "gb" => parsed_title.size *= 1073741824.0,
+            _ => {}
+        };
+        parsed_title.size = parsed_title.size.floor();
         mirror_link.information = Some(LinkInformation {
             error: "success".to_string(),
             file_name: parsed_title.file_name,
