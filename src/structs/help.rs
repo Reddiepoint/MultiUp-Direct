@@ -3,7 +3,7 @@ use crate::functions::download::get_html;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use eframe::egui::{Context, ScrollArea};
-use once_cell::sync::Lazy;
+use std::sync::OnceLock;
 use scraper::{Element, Selector};
 use std::cmp::Ordering;
 use std::string::ToString;
@@ -30,13 +30,9 @@ pub struct Help {
 }
 
 
-static VERSION_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap()
-});
+static VERSION_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
-static CHANGELOG_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap()
-});
+static CHANGELOG_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
@@ -118,12 +114,14 @@ impl Help {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36 Edge/12.0")
             .build()
             .unwrap();
+        let version_selector = VERSION_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap());
+        let changelog_selector = CHANGELOG_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap());
         thread::spawn(move || {
             rt.block_on(async {
                 let website_html = get_html(HOMEPAGE, &client).await.unwrap();
                 let website_html = scraper::Html::parse_document(&website_html);
-                let latest_version = website_html.select(&VERSION_SELECTOR).next().unwrap();
-                let changelog = website_html.select(&CHANGELOG_SELECTOR)
+                let latest_version = website_html.select(version_selector).next().unwrap();
+                let changelog = website_html.select(changelog_selector)
                     .find(|element| element.text().collect::<Vec<_>>().join("") == "Changelog").unwrap()
                     .parent_element().unwrap()
                     .next_sibling_element().unwrap()
