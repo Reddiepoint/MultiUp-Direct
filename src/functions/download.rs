@@ -62,8 +62,23 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
     let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
-    if link_hosts.1.is_empty() {
+    if link_hosts.1[0].name_host == "error" {
+        let mut url = mirror_link.url.clone();
+        if url.ends_with("/a") {
+            url = url.replace("/a", "");
+        }
         mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
+        mirror_link.information = Some(LinkInformation {
+            error: "invalid".to_string(),
+            file_name: "Invalid link".to_string(),
+            size: 0.to_string(),
+            date_upload: "".to_string(),
+            time_upload: 0,
+            date_last_download: "N/A".to_string(),
+            number_downloads: 0,
+            description: Some(url),
+            hosts: Default::default(),
+        });
         return mirror_link.clone()
     }
     if !check_status {
@@ -123,10 +138,13 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<
         let validity = element.value().attr("validity").unwrap();
         links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
     };
+    if links.is_empty() {
+        return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())])
+    }
     let mirror_title = website_html.select(&file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
     let title_stuff = parse_title(&mirror_title);
 
-    (title_stuff, links) // Will be empty if invalid page
+    (title_stuff, links)
 }
 
 fn parse_title(input: &str) -> ParsedTitle {

@@ -259,7 +259,6 @@ impl Download {
                         self.generating = generating;
                         if !self.generating {
                             self.timer.take();
-                            //let direct_links: Vec<DirectLink> = self.mirror_links.iter().filter(|(_order, mirror_link)| mirror_link.direct_links.is_some()).flat_map(|(_order, mirror_link)| mirror_link.direct_links.clone().unwrap()).collect();
                         };
                     };
                 };
