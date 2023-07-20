@@ -188,7 +188,7 @@ impl Download {
 
                 let recheck_status = self.recheck_status;
                 let multiup_links = self.multiup_links.clone();
-                let mut mirror_links = fix_multiup_links(&multiup_links);
+                let mut mirror_links = fix_multiup_links(multiup_links);
                 self.total_number_of_links = mirror_links.len();
                 thread::spawn(move || {
                     rt.block_on(async {

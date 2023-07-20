@@ -1,45 +1,100 @@
-use crossbeam_channel::{Sender};
 use std::sync::OnceLock;
-use reqwest::{Client};
+use std::thread::sleep;
+use std::time::Duration;
+
+use crossbeam_channel::{Sender, TryRecvError};
+use reqwest::Client;
+use scraper::Selector;
+use tokio::runtime::Runtime;
+
 use crate::functions::hosts::check_validity;
 use crate::structs::download::ParsedTitle;
 use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
 
 static MULTIUP_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static MIRROR_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+static PROJECT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+
 /// Convert short and long links to the en/mirror page. Removes duplicates
-pub fn fix_multiup_links(multiup_links: &str) -> Vec<MirrorLink> {
-    let mut mirror_links = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
-    //let mut mirror_links = vec![];
+pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
     let mirror_prefix = "https://multiup.org/en/mirror/";
-    let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/[^/]+/[^/]+$"#).unwrap());
+    let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://(www\.)?multiup\.org/(en/)?(download/)?"#).unwrap());
+    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/[^/]+/[^/]+$"#).unwrap());
+    let project_regex = PROJECT_REGEX.get_or_init(|| regex::Regex::new(r#"^https:\/\/(www\.)?multiup\.org\/(en\/)?project\/.*$"#).unwrap());
+
+    let mut mirror_links: Vec<String> = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
+    let (multiup_links_tx, multiup_links_rx) = crossbeam_channel::unbounded();
     for line in multiup_links.lines() {
-        let multiup_link = line.trim().split(' ').next().unwrap();
-        let multiup_link = multiup_link.replace("www.", ""); // Compatibility for older links
-
-        let prefixes = ["https://multiup.org/download/", "http://multiup.org/download/", "https://multiup.org/en/download/", "https://multiup.org/"];
-        let fixed_link = if multiup_regex.is_match(&multiup_link) {
-            multiup_link
-        } else {
-            let mut mirror_link = String::new();
-            for prefix in prefixes {
-                if let Some(suffix) = multiup_link.strip_prefix(prefix) {
-                    let mut fixed_link = format!("{}{}", mirror_prefix, suffix);
-                    if !multiup_regex.is_match(&fixed_link) {
-                        fixed_link.push_str("/a");
+        let multiup_link = line.trim().split(' ').next().unwrap().to_string();
+        if mirror_regex.is_match(&multiup_link) {
+            println!("Mirror match");
+            if !mirror_links.contains(&multiup_link) {
+                mirror_links.push(multiup_link.to_string());
+            }
+        } else if project_regex.is_match(&multiup_link) {
+            println!("Project match");
+            let rt = Runtime::new().unwrap();
+            let multiup_links_tx = multiup_links_tx.clone();
+            std::thread::spawn(move || {
+                rt.block_on(async {
+                    let multiup_links = match get_project_links(&multiup_link).await {
+                        Some(project_links) => fix_multiup_links(project_links.clone()),
+                        None => vec![MirrorLink::new(multiup_link.to_string())]
                     };
-                    mirror_link = fixed_link;
-                    break
-                }
-            };
-            mirror_link
-        };
-
-        if !fixed_link.is_empty() && !mirror_links.contains(&fixed_link) {
-            mirror_links.push(fixed_link)
+                    let _ = multiup_links_tx.send(multiup_links);
+                });
+            });
+        } else if multiup_regex.is_match(&multiup_link) {
+            println!("Multiup match");
+            let suffix = multiup_regex.replace(&multiup_link, "");
+            let mut fixed_link = format!("{}{}", mirror_prefix, suffix);
+            if mirror_regex.is_match(&fixed_link) {
+                if !mirror_links.contains(&fixed_link) {
+                    mirror_links.push(fixed_link);
+                };
+            } else {
+                fixed_link.push_str("/a");
+                if mirror_regex.is_match(&fixed_link) && !mirror_links.contains(&fixed_link) {
+                    mirror_links.push(fixed_link);
+                };
+            }
         }
     };
-    let mirror_links = mirror_links.iter().map(|link| MirrorLink::new(link.to_string())).collect();
+
+    drop(multiup_links_tx);
+    let mut mirror_links: Vec<MirrorLink> = mirror_links.iter().map(|link| MirrorLink::new(link.to_string())).collect();
+
+    loop {
+        match multiup_links_rx.try_recv() {
+            Ok(mut links) => {
+                mirror_links.append(&mut links)
+            }
+            Err(TryRecvError::Empty) => {
+            },
+            Err(TryRecvError::Disconnected) => {
+                // Channel is disconnected
+                break;
+            }
+        }
+    }
     mirror_links
+}
+
+static PROJECT_LINKS_SELECTOR: OnceLock<Selector> = OnceLock::new();
+
+pub async fn get_project_links(url: &str) -> Option<String> {
+    let client = Client::new();
+    let html = match client.get(url).send().await.unwrap().text().await {
+        Ok(html) => html,
+        Err(_) => return None
+    };
+    let project_links_selector = PROJECT_LINKS_SELECTOR.get_or_init(|| Selector::parse(r#"#textarea-links-long"#).unwrap());
+    let html = scraper::Html::parse_document(&html);
+    let links = match html.select(project_links_selector).next() {
+        Some(links) => links,
+        None => return None
+    };
+    Some(links.inner_html().to_string())
 }
 
 pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>) {
@@ -64,9 +119,6 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.1[0].name_host == "error" {
         let mut url = mirror_link.url.clone();
-        if url.ends_with("/a") {
-            url = url.replace("/a", "");
-        }
         mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
         mirror_link.information = Some(LinkInformation {
             error: "invalid".to_string(),
@@ -79,7 +131,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
             description: Some(url),
             hosts: Default::default(),
         });
-        return mirror_link.clone()
+        return mirror_link.clone();
     }
     if !check_status {
         link_hosts.1.sort_by_key(|link| link.name_host.clone());
@@ -119,8 +171,9 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     mirror_link.clone()
 }
 
-static SELECTOR: OnceLock<scraper::Selector> = OnceLock::new();
-static FILE_NAME_SELECTOR: OnceLock<scraper::Selector> = OnceLock::new();
+static SELECTOR: OnceLock<Selector> = OnceLock::new();
+static FILE_NAME_SELECTOR: OnceLock<Selector> = OnceLock::new();
+
 async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<DirectLink>) {
     // Regular links
     let mut links: Vec<DirectLink> = vec![];
@@ -129,17 +182,20 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<
         Ok(html) => html,
         Err(error) => return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())])
     };
-    let selector = SELECTOR.get_or_init(|| scraper::Selector::parse(r#"button[type="submit"]"#).unwrap());
-    let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| scraper::Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
+    let selector = SELECTOR.get_or_init(|| Selector::parse(r#"button[type="submit"]"#).unwrap());
+    let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
     let website_html = scraper::Html::parse_document(&website_html);
-    for element in website_html.select(&selector) {
-        let name_host = element.value().attr("namehost").unwrap();
+    for element in website_html.select(selector) {
+        let name_host = match element.value().attr("namehost") {
+            Some(name_host) => name_host,
+            None => break,
+        };
         let link = element.value().attr("link").unwrap();
         let validity = element.value().attr("validity").unwrap();
         links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
     };
     if links.is_empty() {
-        return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())])
+        return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
     }
     let mirror_title = website_html.select(&file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
     let title_stuff = parse_title(&mirror_title);
