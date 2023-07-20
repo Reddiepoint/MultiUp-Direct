@@ -1,6 +1,4 @@
 use std::sync::OnceLock;
-use std::thread::sleep;
-use std::time::Duration;
 
 use crossbeam_channel::{Sender, TryRecvError};
 use reqwest::Client;
@@ -27,12 +25,10 @@ pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
     for line in multiup_links.lines() {
         let multiup_link = line.trim().split(' ').next().unwrap().to_string();
         if mirror_regex.is_match(&multiup_link) {
-            println!("Mirror match");
             if !mirror_links.contains(&multiup_link) {
                 mirror_links.push(multiup_link.to_string());
             }
         } else if project_regex.is_match(&multiup_link) {
-            println!("Project match");
             let rt = Runtime::new().unwrap();
             let multiup_links_tx = multiup_links_tx.clone();
             std::thread::spawn(move || {
@@ -45,7 +41,6 @@ pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
                 });
             });
         } else if multiup_regex.is_match(&multiup_link) {
-            println!("Multiup match");
             let suffix = multiup_regex.replace(&multiup_link, "");
             let mut fixed_link = format!("{}{}", mirror_prefix, suffix);
             if mirror_regex.is_match(&fixed_link) {
@@ -69,8 +64,7 @@ pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
             Ok(mut links) => {
                 mirror_links.append(&mut links)
             }
-            Err(TryRecvError::Empty) => {
-            },
+            Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
                 // Channel is disconnected
                 break;
