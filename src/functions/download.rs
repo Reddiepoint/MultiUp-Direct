@@ -112,7 +112,7 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
     let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.1[0].name_host == "error" {
-        let mut url = mirror_link.url.clone();
+        let url = mirror_link.url.clone();
         mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
         mirror_link.information = Some(LinkInformation {
             error: "invalid".to_string(),

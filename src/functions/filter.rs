@@ -1,4 +1,4 @@
-
+use std::collections::BTreeSet;
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::DirectLink;
 
@@ -21,9 +21,10 @@ pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<(bool, Str
 }
 
 pub fn set_filter_hosts(links: &[DirectLink]) -> Vec<(String, bool)> {
-    let mut hosts: Vec<(String, bool)> = links.iter().map(|link| (link.name_host.to_string(), true)).collect();
-    hosts.sort_by_key(|host| host.0.clone());
-    hosts.dedup_by_key(|host| host.0.clone());
-    hosts
+    let mut hosts: BTreeSet<String> = BTreeSet::new();
+    for link in links {
+        hosts.insert(link.name_host.to_string());
+    }
 
+    hosts.into_iter().map(|host| (host, true)).collect()
 }
