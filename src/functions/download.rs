@@ -1,4 +1,6 @@
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
+use std::time::Instant;
 
 use crossbeam_channel::{Sender, TryRecvError};
 use reqwest::Client;
@@ -110,10 +112,10 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
 }
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
-    let mut link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
-    if link_hosts.1[0].name_host == "error" {
+    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
+    if link_hosts.1.first().unwrap().name_host == "error" {
         let url = mirror_link.url.clone();
-        mirror_link.direct_links = Some(vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
+        mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]));
         mirror_link.information = Some(LinkInformation {
             error: "invalid".to_string(),
             file_name: "Invalid link".to_string(),
@@ -128,7 +130,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
         return std::mem::take(mirror_link);
     }
     if !check_status {
-        link_hosts.1.sort_by_key(|link| link.name_host.clone());
+        //link_hosts.1.sort_by_key(|link| link.name_host.clone());
         mirror_link.direct_links = Some(link_hosts.1);
         let mut parsed_title = link_hosts.0;
         match parsed_title.unit.to_lowercase().as_str() {
@@ -152,14 +154,14 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
         return std::mem::take(mirror_link);
     }
     let link_information = check_validity(&mirror_link.url).await;
-    let mut direct_links: Vec<DirectLink> = link_hosts.1.into_iter().map(|link| {
+    let direct_links: BTreeSet<DirectLink> = link_hosts.1.into_iter().map(|link| {
         let status = match link_information.hosts.get(&link.name_host).unwrap() {
             Some(validity) => validity,
             None => "unknown"
         };
         DirectLink::new(link.name_host, link.url, status.to_string())
     }).collect();
-    direct_links.sort_by_key(|link| link.name_host.clone());
+    //direct_links.sort_by_key(|link| link.name_host.clone());
     mirror_link.direct_links = Some(direct_links);
     mirror_link.information = Some(link_information);
     std::mem::take(mirror_link)
@@ -168,14 +170,15 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
 static SELECTOR: OnceLock<Selector> = OnceLock::new();
 static FILE_NAME_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
-async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<DirectLink>) {
+async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, BTreeSet<DirectLink>) {
     // Regular links
-    let mut links: Vec<DirectLink> = vec![];
+    let mut links: BTreeSet<DirectLink> = BTreeSet::new();
     // Scrape panel
     let website_html = match get_html(url, client).await {
         Ok(html) => html,
-        Err(error) => return (ParsedTitle::default(), vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())])
+        Err(error) => return (ParsedTitle::default(), BTreeSet::from([DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())]))
     };
+
     let selector = SELECTOR.get_or_init(|| Selector::parse(r#"button[type="submit"]"#).unwrap());
     let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
     let website_html = scraper::Html::parse_document(&website_html);
@@ -187,10 +190,10 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<
         };
         let link = element_value.attr("link").unwrap();
         let validity = element_value.attr("validity").unwrap();
-        links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
+        links.insert(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()));
     };
     if links.is_empty() {
-        return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
+        return (ParsedTitle::new(String::new(), 0.0, String::new()), BTreeSet::from([DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]));
     }
     let mirror_title = website_html.select(file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
     let title_stuff = parse_title(&mirror_title);

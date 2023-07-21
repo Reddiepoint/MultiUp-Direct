@@ -1,13 +1,15 @@
+use std::collections::HashSet;
+use std::thread;
+use std::time::Instant;
+
+use crossbeam_channel::Receiver;
+use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
+use tokio::runtime::Runtime;
+
 use crate::functions::download::{fix_multiup_links, generate_direct_links};
 use crate::functions::filter::{filter_links, set_filter_hosts};
 use crate::structs::filter::FilterMenu;
 use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
-use crossbeam_channel::Receiver;
-use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
-use std::collections::HashSet;
-use std::thread;
-use std::time::Instant;
-use tokio::runtime::Runtime;
 
 #[derive(Default)]
 struct Receivers {
@@ -120,7 +122,7 @@ impl Download {
                                                         file.time_upload,
                                                         file.number_downloads,
                                                 )
-                                            },
+                                            }
                                             None => {
                                                 format!("{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
                                                         file.file_name,
@@ -134,7 +136,6 @@ impl Download {
                                     });
                                 });
                             }
-
                         });
                 });
             };
@@ -196,8 +197,7 @@ impl Download {
                             &mut mirror_links,
                             recheck_status,
                             direct_links_tx,
-                        )
-                        .await;
+                        ).await;
                     });
                     let _ = generating_tx.send(false);
                 });
@@ -221,7 +221,7 @@ impl Download {
                     self.time_elapsed = timer.elapsed().as_millis();
                 };
 
-                if self.time_elapsed != 0 && self.total_number_of_links > 0{
+                if self.time_elapsed != 0 && self.total_number_of_links > 0 {
                     let formatted_time = format!(
                         "Time taken: {}.{}s",
                         self.time_elapsed / 1000,
@@ -263,19 +263,23 @@ impl Download {
                     };
                 };
             }
-
         });
     }
 
     fn display_links_ui(&mut self, ui: &mut Ui) {
         let direct_links: Vec<DirectLink> = self.mirror_links.iter_mut().filter_map(|(_order, mirror_link, displayed)| {
-            for direct_links in mirror_link.direct_links.iter_mut() {
-                for link in direct_links {
+            if let Some(direct_link) = mirror_link.direct_links.clone() {
+                let mut direct_links = vec![];
+                for mut link in direct_link.iter().cloned() {
                     link.displayed = *displayed;
+                    direct_links.push(link);
                 }
+                Some(direct_links)
+            } else {
+                None
             }
-            mirror_link.direct_links.clone()
         }).flatten().collect();
+
         self.direct_links = direct_links;
         //self.display_links = filter_links(&self.direct_links, &self.filter_menu);
         let display_links = filter_links(&self.direct_links, &self.filter_menu);
@@ -400,7 +404,7 @@ impl ParsedTitle {
         ParsedTitle {
             file_name,
             size,
-            unit
+            unit,
         }
     }
 }

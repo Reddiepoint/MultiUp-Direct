@@ -1,12 +1,31 @@
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashMap};
+
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq)]
 pub struct DirectLink {
     pub name_host: String,
     pub url: String,
     pub validity: String,
-    pub displayed: bool
+    pub displayed: bool,
+}
+
+impl PartialOrd for DirectLink {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.name_host.cmp(&other.name_host))
+    }
+}
+impl Ord for DirectLink {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name_host.cmp(&other.name_host)
+    }
+}
+
+impl PartialEq for DirectLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.url == other.url
+    }
 }
 
 impl DirectLink {
@@ -15,7 +34,7 @@ impl DirectLink {
             name_host,
             url,
             validity,
-            displayed: false
+            displayed: false,
         }
     }
 }
@@ -24,8 +43,8 @@ impl DirectLink {
 #[derive(Default, Clone)]
 pub struct MirrorLink {
     pub url: String,
-    pub direct_links: Option<Vec<DirectLink>>,
-    pub information: Option<LinkInformation>
+    pub direct_links: Option<BTreeSet<DirectLink>>,
+    pub information: Option<LinkInformation>,
 }
 
 impl MirrorLink {
@@ -33,7 +52,7 @@ impl MirrorLink {
         Self {
             url,
             direct_links: None,
-            information: None
+            information: None,
         }
     }
 }
@@ -53,7 +72,7 @@ pub struct LinkInformation {
 
 #[derive(Serialize)]
 pub struct Url {
-    pub link: String
+    pub link: String,
 }
 
 //#[derive(Deserialize)]
