@@ -388,7 +388,7 @@ impl Download {
     }
 }
 
-
+#[derive(Default)]
 pub struct ParsedTitle {
     pub file_name: String,
     pub size: f64,

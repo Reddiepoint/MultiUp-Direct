@@ -125,7 +125,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
             description: Some(url),
             hosts: Default::default(),
         });
-        return mirror_link.clone();
+        return std::mem::take(mirror_link);
     }
     if !check_status {
         link_hosts.1.sort_by_key(|link| link.name_host.clone());
@@ -149,7 +149,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
             description: None,
             hosts: Default::default(),
         });
-        return mirror_link.clone();
+        return std::mem::take(mirror_link);
     }
     let link_information = check_validity(&mirror_link.url).await;
     let mut direct_links: Vec<DirectLink> = link_hosts.1.into_iter().map(|link| {
@@ -162,7 +162,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     direct_links.sort_by_key(|link| link.name_host.clone());
     mirror_link.direct_links = Some(direct_links);
     mirror_link.information = Some(link_information);
-    mirror_link.clone()
+    std::mem::take(mirror_link)
 }
 
 static SELECTOR: OnceLock<Selector> = OnceLock::new();
@@ -174,24 +174,25 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, Vec<
     // Scrape panel
     let website_html = match get_html(url, client).await {
         Ok(html) => html,
-        Err(error) => return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())])
+        Err(error) => return (ParsedTitle::default(), vec![DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())])
     };
     let selector = SELECTOR.get_or_init(|| Selector::parse(r#"button[type="submit"]"#).unwrap());
     let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
     let website_html = scraper::Html::parse_document(&website_html);
     for element in website_html.select(selector) {
-        let name_host = match element.value().attr("namehost") {
+        let element_value = element.value();
+        let name_host = match element_value.attr("namehost") {
             Some(name_host) => name_host,
             None => break,
         };
-        let link = element.value().attr("link").unwrap();
-        let validity = element.value().attr("validity").unwrap();
+        let link = element_value.attr("link").unwrap();
+        let validity = element_value.attr("validity").unwrap();
         links.push(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()))
     };
     if links.is_empty() {
         return (ParsedTitle::new(String::new(), 0.0, String::new()), vec![DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]);
     }
-    let mirror_title = website_html.select(&file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
+    let mirror_title = website_html.select(file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
     let title_stuff = parse_title(&mirror_title);
 
     (title_stuff, links)
@@ -211,6 +212,5 @@ fn parse_title(input: &str) -> ParsedTitle {
 }
 
 pub async fn get_html(url: &str, client: &Client) -> Result<String, reqwest::Error> {
-    //client.get(url).await?.text().await
     client.get(url).send().await?.text().await
 }

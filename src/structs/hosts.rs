@@ -21,7 +21,7 @@ impl DirectLink {
 }
 
 /// Contains the fixed mirror link and possibly the generated direct links
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct MirrorLink {
     pub url: String,
     pub direct_links: Option<Vec<DirectLink>>,
