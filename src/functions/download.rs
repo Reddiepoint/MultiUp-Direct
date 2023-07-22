@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
-use std::time::Instant;
 
+use async_recursion::async_recursion;
 use crossbeam_channel::{Sender, TryRecvError};
-use reqwest::Client;
-use scraper::Selector;
+use reqwest::{Client, StatusCode};
+use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
 
 use crate::functions::hosts::check_validity;
@@ -115,10 +115,11 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
     if link_hosts.1.first().unwrap().name_host == "error" {
         let url = mirror_link.url.clone();
-        mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]));
+        let description = link_hosts.1.first().unwrap().url.clone();
+        mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("error".to_string(), format!("{} - {}", description, url), "invalid".to_string())]));
         mirror_link.information = Some(LinkInformation {
             error: "invalid".to_string(),
-            file_name: "Invalid link".to_string(),
+            file_name: description,
             size: 0.to_string(),
             date_upload: "".to_string(),
             time_upload: 0,
@@ -169,35 +170,62 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
 
 static SELECTOR: OnceLock<Selector> = OnceLock::new();
 static FILE_NAME_SELECTOR: OnceLock<Selector> = OnceLock::new();
+static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
+#[async_recursion]
 async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, BTreeSet<DirectLink>) {
     // Regular links
     let mut links: BTreeSet<DirectLink> = BTreeSet::new();
     // Scrape panel
-    let website_html = match get_html(url, client).await {
+    //let now = Instant::now();
+    let html = match get_html(url, client).await {
         Ok(html) => html,
         Err(error) => return (ParsedTitle::default(), BTreeSet::from([DirectLink::new("error".to_string(), error.to_string(), "invalid".to_string())]))
     };
+    //println!("{}", html);
+    //let after = Instant::now();
+    //println!("Time taken to load: {}", (after - now).as_millis());
 
     let selector = SELECTOR.get_or_init(|| Selector::parse(r#"button[type="submit"]"#).unwrap());
     let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
-    let website_html = scraper::Html::parse_document(&website_html);
-    for element in website_html.select(selector) {
-        let element_value = element.value();
-        let name_host = match element_value.attr("namehost") {
-            Some(name_host) => name_host,
-            None => break,
+    let queue_selector = QUEUE_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > div.row > div > section > div > div > div:nth-child(2) > div > h4"#).unwrap());
+
+    {
+        let website_html = scraper::Html::parse_document(&html);
+
+        for element in website_html.select(queue_selector) {
+            let mut queue_status = "";
+            for x in element.next_sibling_element().unwrap().text() {
+                if x.trim() == "File not found on servers" {
+                    queue_status = "File not found on servers";
+                    break;
+                } else {
+                    queue_status = "In queue";
+                }
+            };
+            links.insert(DirectLink::new("error".to_string(), queue_status.to_string(), "invalid".to_string()));
+            //if element.next_sibling_element().unwrap().first_child().unwrap() {
+            //
+            //}
+        }
+        for element in website_html.select(selector) {
+            let element_value = element.value();
+            let name_host = match element_value.attr("namehost") {
+                Some(name_host) => name_host,
+                None => break,
+            };
+            let link = element_value.attr("link").unwrap();
+            let validity = element_value.attr("validity").unwrap();
+            links.insert(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()));
         };
-        let link = element_value.attr("link").unwrap();
-        let validity = element_value.attr("validity").unwrap();
-        links.insert(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()));
-    };
-    if links.is_empty() {
-        return (ParsedTitle::new(String::new(), 0.0, String::new()), BTreeSet::from([DirectLink::new("error".to_string(), "Invalid link".to_string(), "invalid".to_string())]));
     }
+    if links.is_empty() {
+        return scrape_link_for_hosts(url, client).await;
+    }
+
+    let website_html = scraper::Html::parse_document(&html);
     let mirror_title = website_html.select(file_name_selector).next().unwrap().next_sibling().unwrap().value().as_text().unwrap().to_string();
     let title_stuff = parse_title(&mirror_title);
-
     (title_stuff, links)
 }
 
@@ -214,6 +242,16 @@ fn parse_title(input: &str) -> ParsedTitle {
     }
 }
 
+#[async_recursion]
 pub async fn get_html(url: &str, client: &Client) -> Result<String, reqwest::Error> {
-    client.get(url).send().await?.text().await
+    let a = client.get(url).send().await?;
+    match a.error_for_status() {
+        Ok(res) => res.text().await,
+        Err(error) => {
+            if error.status().unwrap() != StatusCode::NOT_FOUND {
+                return get_html(url, client).await;
+            }
+            Err(error)
+        }
+    }
 }

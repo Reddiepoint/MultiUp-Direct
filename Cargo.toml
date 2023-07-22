@@ -1,6 +1,6 @@
 [package]
-name = "MultiUp_Direct_2_4_0"
-version = "2.4.0"
+name = "MultiUp_Direct_2_4_1"
+version = "2.4.1"
 authors = ["Redpoint"]
 edition = "2021"
 
@@ -9,7 +9,7 @@ edition = "2021"
 [profile.release]
 codegen-units = 1
 lto = "fat"
-debug = true
+#debug = true
 
 
 [dependencies]

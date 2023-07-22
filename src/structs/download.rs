@@ -112,27 +112,15 @@ impl Download {
                                         }
                                     });
                                     ui.label({
-                                        match &file.description {
-                                            Some(description) => {
-                                                format!("{} | {} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
-                                                        file.file_name,
-                                                        description,
-                                                        file.size,
-                                                        file.date_upload,
-                                                        file.time_upload,
-                                                        file.number_downloads,
-                                                )
-                                            }
-                                            None => {
-                                                format!("{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
-                                                        file.file_name,
-                                                        file.size,
-                                                        file.date_upload,
-                                                        file.time_upload,
-                                                        file.number_downloads,
-                                                )
-                                            }
-                                        }
+                                        let description = file.description.as_ref().map_or(String::new(), |desc| format!(" | {}", desc));
+                                        format!("{}{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                                                file.file_name,
+                                                description,
+                                                file.size,
+                                                file.date_upload,
+                                                file.time_upload,
+                                                file.number_downloads,
+                                        )
                                     });
                                 });
                             }
