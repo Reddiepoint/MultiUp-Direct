@@ -3,7 +3,7 @@
 pub mod main;
 //pub mod upload;
 pub mod download;
-pub mod hosts;
+pub mod links;
 pub mod filter;
 //pub mod settings;
 pub mod help;

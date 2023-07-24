@@ -1,7 +1,10 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
+use async_recursion::async_recursion;
 use serde::{Deserialize, Serialize};
+
+
 
 #[derive(Clone, Debug, Eq)]
 pub struct DirectLink {
@@ -82,17 +85,46 @@ pub struct Url {
     pub link: String,
 }
 
-//#[derive(Deserialize)]
-//pub struct HostInfo {
-//    selected: String,
-//    size: u32,
-//}
+#[async_recursion]
+pub async fn check_validity(url: &str) -> LinkInformation {
+    let client = reqwest::Client::new();
+    match client.post("https://multiup.org/api/check-file")
+        .form(&Url { link: url.to_string() })
+        .send().await.unwrap().json::<LinkInformation>().await {
+        Ok(information) => information,
+        Err(_error) => {
+            LinkInformation {
+                error: "error".to_string(),
+                file_name: "File not available".to_string(),
+                size: "0".to_string(),
+                date_upload: "0".to_string(),
+                time_upload: 0,
+                date_last_download: "0".to_string(),
+                number_downloads: 0,
+                description: Some(url.to_string()),
+                hosts: Default::default(),
+            }
+        }
+    }
+}
+
+//pub fn get_available_hosts() -> Vec<String> {
+//    let rt = Runtime::new().expect("Unable to create runtime");
+//    let _ = rt.enter();
+//    let (tx, rx) = mpsc::sync_channel(0);
+//    std::thread::spawn(move || {
+//        let host_list = rt.block_on(async {
+//            let response = reqwest::get("https://multiup.org/api/get-list-hosts").await.unwrap().json::<AvailableHostsResponse>().await.unwrap();
+//            let mut list = vec![];
+//            for (i, _j) in response.hosts {
+//                list.push(i);
+//            };
+//            list
+//        });
+//        tx.send(host_list)
+//    });
 //
-//#[derive(Deserialize)]
-//pub struct AvailableHostsResponse {
-//    error: String,
-//    pub hosts: HashMap<String, HostInfo>,
-//    default: Vec<String>,
-//    #[serde(rename = "maxHosts")]
-//    max_hosts: u32,
+//    rx.recv().unwrap()
 //}
+
+

@@ -1,11 +1,12 @@
 #![windows_subsystem = "windows"]
 
-mod constants;
-mod functions;
-mod structs;
-
 use eframe::egui;
-use crate::structs::main::Application;
+
+use crate::modules::main::Application;
+
+//mod constants;
+//mod functions;
+mod modules;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {

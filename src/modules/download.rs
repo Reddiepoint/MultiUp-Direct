@@ -13,10 +13,8 @@ use reqwest::{Client, StatusCode};
 use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
 
-use crate::functions::filter::{filter_links, set_filter_hosts};
-use crate::functions::hosts::check_validity;
-use crate::structs::filter::FilterMenu;
-use crate::structs::hosts::{DirectLink, LinkInformation, MirrorLink};
+use crate::modules::filter::{filter_links, FilterMenu, set_filter_hosts};
+use crate::modules::links::{check_validity, DirectLink, LinkInformation, MirrorLink};
 
 #[derive(Default)]
 struct Receivers {

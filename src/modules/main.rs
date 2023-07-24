@@ -1,8 +1,7 @@
 use eframe::egui::{self, menu, CentralPanel};
 
-use crate::constants::help::VERSION;
-use crate::structs::help::Help;
-use crate::structs::{download::Download};
+use crate::modules::help::{Help, VERSION};
+use crate::modules::{download::Download};
 
 #[derive(Default)]
 pub struct Application {
@@ -28,11 +27,10 @@ impl eframe::App for Application {
         // Tabs
         egui::TopBottomPanel::top("Tab Bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                for (panel, label) in [
-                    (Panel::Download, "Download"),
+                {
+                    let (panel, label) = (Panel::Download, "Download");
                     //(Panel::Upload, "Upload"),
                     //(Panel::Settings, "Settings"),
-                ] {
                     ui.selectable_value(&mut self.panel, panel, label);
                 }
                 menu::bar(ui, |ui| {
@@ -46,7 +44,8 @@ impl eframe::App for Application {
 
                         if ui.button("Check for updates").clicked() {
                             let (tx, rx) = crossbeam_channel::unbounded();
-                            (self.help.update_sender, self.help.update_receiver) = (Some(tx), Some(rx));
+                            //(self.help.update_sender, self.help.update_receiver) = (Some(tx), Some(rx));
+                            self.help.new_channels(tx, rx);
                             self.help.show_update = true;
                             ui.close_menu();
                         }
