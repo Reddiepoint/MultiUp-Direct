@@ -4,8 +4,6 @@ use std::collections::{BTreeSet, HashMap};
 use async_recursion::async_recursion;
 use serde::{Deserialize, Serialize};
 
-
-
 #[derive(Clone, Debug, Eq)]
 pub struct DirectLink {
     pub name_host: String,

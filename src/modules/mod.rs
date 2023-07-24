@@ -1,9 +1,9 @@
 //pub mod login;
 //pub mod server;
-pub mod main;
 //pub mod upload;
-pub mod download;
-pub mod links;
-pub mod filter;
 //pub mod settings;
+pub mod download;
 pub mod help;
+pub mod filter;
+pub mod links;
+pub mod main;

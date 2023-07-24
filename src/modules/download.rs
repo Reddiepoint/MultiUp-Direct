@@ -1,19 +1,16 @@
-use std::collections::BTreeSet;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::OnceLock;
 use std::thread;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_recursion::async_recursion;
-use crossbeam_channel::{Sender, TryRecvError};
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
 use reqwest::{Client, StatusCode};
 use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
 
-use crate::modules::filter::{filter_links, FilterMenu, set_filter_hosts};
+use crate::modules::filter::{filter_links, set_filter_hosts, FilterMenu};
 use crate::modules::links::{check_validity, DirectLink, LinkInformation, MirrorLink};
 
 #[derive(Default)]

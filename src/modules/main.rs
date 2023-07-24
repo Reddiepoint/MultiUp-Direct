@@ -1,7 +1,11 @@
 use eframe::egui::{self, menu, CentralPanel};
 
-use crate::modules::help::{Help, VERSION};
-use crate::modules::{download::Download};
+use crate::modules::{
+    download::Download,
+    help::{Help, VERSION},
+};
+
+
 
 #[derive(Default)]
 pub struct Application {

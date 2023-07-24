@@ -1,11 +1,9 @@
 use std::cmp::Ordering;
-use std::string::ToString;
 use std::sync::OnceLock;
 use std::thread;
 
 use crossbeam_channel::{Receiver, Sender};
-use eframe::egui;
-use eframe::egui::{Context, ScrollArea};
+use eframe::egui::{Context, ScrollArea, Window};
 use scraper::{Element, Selector};
 
 use crate::modules::download::get_html;
@@ -68,7 +66,7 @@ impl Help {
     }
 
     pub fn show_help(ctx: &Context, open: &mut bool) {
-        egui::Window::new("Help")
+        Window::new("Help")
             .open(open)
             .show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
                 ui.label(HELP_MESSAGE);
@@ -76,7 +74,7 @@ impl Help {
     }
 
     pub fn show_update(ctx: &Context, help: &mut Help) {
-        egui::Window::new("Updates")
+        Window::new("Updates")
             .open(&mut help.show_update)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
