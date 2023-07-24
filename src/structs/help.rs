@@ -1,5 +1,5 @@
 use crate::constants::help::{HELP_MESSAGE, VERSION};
-use crate::functions::download::get_html;
+use crate::structs::download::get_html;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use eframe::egui::{Context, ScrollArea};

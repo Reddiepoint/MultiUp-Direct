@@ -1,15 +1,26 @@
 use async_recursion::async_recursion;
+
 use crate::structs::hosts::{LinkInformation, Url};
 
 #[async_recursion]
 pub async fn check_validity(url: &str) -> LinkInformation {
     let client = reqwest::Client::new();
     match client.post("https://multiup.org/api/check-file")
-        .form(&Url { link: url.to_string()})
+        .form(&Url { link: url.to_string() })
         .send().await.unwrap().json::<LinkInformation>().await {
         Ok(information) => information,
         Err(_error) => {
-            check_validity(url).await
+            LinkInformation {
+                error: "error".to_string(),
+                file_name: "File not available".to_string(),
+                size: "0".to_string(),
+                date_upload: "0".to_string(),
+                time_upload: 0,
+                date_last_download: "0".to_string(),
+                number_downloads: 0,
+                description: Some(url.to_string()),
+                hosts: Default::default(),
+            }
         }
     }
 }

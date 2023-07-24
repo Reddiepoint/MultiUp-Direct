@@ -16,6 +16,7 @@ impl PartialOrd for DirectLink {
         Some(self.name_host.cmp(&other.name_host))
     }
 }
+
 impl Ord for DirectLink {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name_host.cmp(&other.name_host)
@@ -24,7 +25,7 @@ impl Ord for DirectLink {
 
 impl PartialEq for DirectLink {
     fn eq(&self, other: &Self) -> bool {
-        self.url == other.url
+        self.name_host == other.name_host
     }
 }
 
@@ -45,6 +46,12 @@ pub struct MirrorLink {
     pub url: String,
     pub direct_links: Option<BTreeSet<DirectLink>>,
     pub information: Option<LinkInformation>,
+}
+
+impl PartialEq for MirrorLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.url == other.url
+    }
 }
 
 impl MirrorLink {
