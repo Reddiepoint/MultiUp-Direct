@@ -191,13 +191,14 @@ impl Download {
                 self.cancelled = false;
             };
 
-            self.update_generation_status();
 
             self.update_total_number_of_links();
 
             self.update_direct_links();
 
             self.display_time_and_progress(ui);
+
+            self.update_generation_status();
         });
     }
 
