@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -6,11 +6,12 @@ use std::time::{Duration, Instant};
 use async_recursion::async_recursion;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
+use egui_extras::{Column, TableBuilder};
 use reqwest::{Client, StatusCode};
 use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
 
-use crate::modules::filter::{filter_links, set_filter_hosts, FilterMenu};
+use crate::modules::filter::{filter_links, FilterMenu, set_filter_hosts};
 use crate::modules::links::{check_validity, DirectLink, LinkInformation, MirrorLink};
 
 #[derive(Default)]
@@ -81,7 +82,7 @@ impl Download {
             let mut selection = -1;
             if !link_information.is_empty() && link_information[0].0.is_some() {
                 ui.collapsing("Link Information", |ui| {
-                    ScrollArea::vertical().id_source("Link Information").min_scrolled_height(height).min_scrolled_width(ui.available_width()).show(ui, |ui| {
+                    ScrollArea::vertical().id_source("Link Information").min_scrolled_height(height).min_scrolled_width(ui.available_width() - 200.0).show(ui, |ui| {
                         for i in 0..link_information.len() {
                             let file = link_information[i].0.clone().unwrap();
                             ui.horizontal(|ui| {
@@ -150,11 +151,11 @@ impl Download {
     fn link_generation_ui(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.recheck_status, "Re-check host status");
-
             if ui.add_enabled(!self.generating, Button::new("Generate links")).clicked() {
                 let (direct_links_tx, direct_links_rx) = crossbeam_channel::bounded(200);
                 let (generating_tx, generating_rx) = crossbeam_channel::unbounded();
                 let (total_links_tx, total_links_rx) = crossbeam_channel::unbounded();
+
                 self.receivers = Receivers::new(
                     Some(direct_links_rx),
                     Some(generating_rx),
@@ -180,10 +181,7 @@ impl Download {
                             direct_links_tx,
                         ).await;
                     });
-                    let now = Instant::now();
                     let _ = generating_tx.send(false);
-                    let after = Instant::now();
-                    println!("Time to fix: {}", (after - now).as_micros());
                 });
 
                 self.total_number_of_links = 0;
@@ -209,21 +207,21 @@ impl Download {
             ui.set_height(height);
             ui.vertical(|ui| {
                 ui.heading("Direct Links:");
-                ScrollArea::vertical().min_scrolled_height(ui.available_height()).min_scrolled_width(ui.available_width() - 200.0).id_source("Direct Link Output Box").show(ui, |ui| {
-                    ui.set_width(ui.available_width() - 200.0);
-                    ui.vertical(|ui| {
-                        if self.display_links.is_empty() {
-                            return;
-                        }
-                        let selected_links: HashSet<&String> = self.selected_links.iter().collect();
-                        let displayed_links: HashSet<&String> = self.display_links.iter().map(|(_, url)| url).collect();
-                        let mut selected_links: HashSet<&str> = selected_links.intersection(&displayed_links).map(|link| link.as_str()).collect();
 
-                        let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                if self.display_links.is_empty() {
+                    return;
+                }
+                let selected_links: HashSet<&String> = self.selected_links.iter().collect();
+                let displayed_links: HashSet<&String> = self.display_links.iter().map(|(_, url)| url).collect();
+                let mut selected_links: HashSet<&str> = selected_links.intersection(&displayed_links).map(|link| link.as_str()).collect();
 
-                        let now = Instant::now();
+                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
 
-                        for (_, link) in self.display_links.iter() {
+                let width = ui.available_width() - 200.0;
+                TableBuilder::new(ui).column(Column::exact(width)).body(|body| {
+                    body.rows(18.0, self.display_links.len(), |row_index, mut row| {
+                        let (_, link) = &self.display_links[row_index]; // get the link for the current row
+                        row.col(|ui| { // add content to the column
                             let link_label = ui.add(Label::new(link).sense(Sense::click()));
                             if link_label.hovered() || self.selected_links.contains(link) {
                                 link_label.clone().highlight();
@@ -245,6 +243,7 @@ impl Download {
                                     self.selection_indices.0 = Some(self.display_links.iter().position(|(_, url)| url == link).unwrap())
                                 };
                             };
+
 
                             if self.selection_indices.1.is_some() && self.selection_indices.0 > self.selection_indices.1 {
                                 (self.selection_indices.0, self.selection_indices.1) = (self.selection_indices.1, self.selection_indices.0)
@@ -303,14 +302,15 @@ impl Download {
                                     }
                                 }
                             });
-                        };
-                        self.selected_links = selected_links.iter().map(|url| url.to_string()).collect();
-                        let after = Instant::now();
-                        println!("Time taken: {}", (after - now).as_micros());
+                        });
                     });
                 });
+                self.selected_links = selected_links.iter().map(|url| url.to_string()).collect();
             });
-            FilterMenu::show(ui, &mut self.filter_menu);
+
+            if !self.direct_links.is_empty() {
+                FilterMenu::show(ui, &mut self.filter_menu);
+            }
         });
     }
 
@@ -331,6 +331,23 @@ impl Download {
     }
 
     fn update_direct_links(&mut self) {
+        if !self.generating {
+            let direct_links: Vec<DirectLink> = self.mirror_links.iter_mut().filter_map(|(_order, mirror_link, displayed)| {
+                if let Some(direct_link) = mirror_link.direct_links.clone() {
+                    let mut direct_links = vec![];
+                    for mut link in direct_link.iter().cloned() {
+                        link.displayed = *displayed;
+                        direct_links.push(link);
+                    }
+                    Some(direct_links)
+                } else {
+                    None
+                }
+            }).flatten().collect();
+            self.direct_links = direct_links;
+            self.display_links = filter_links(&self.direct_links, &self.filter_menu);
+        }
+
         if let Some(rx) = &self.receivers.direct_links {
             while let Ok((order, mirror_link)) = rx.try_recv() {
                 let index = self.mirror_links.binary_search_by_key(&order, |&(o, _, _)| o).unwrap_or_else(|x| x);
@@ -341,27 +358,12 @@ impl Download {
 
 
             if !self.generating {
-                let direct_links: Vec<DirectLink> = self.mirror_links.iter_mut().filter_map(|(_order, mirror_link, displayed)| {
-                    if let Some(direct_link) = mirror_link.direct_links.clone() {
-                        let mut direct_links = vec![];
-                        for mut link in direct_link.iter().cloned() {
-                            link.displayed = *displayed;
-                            direct_links.push(link);
-                        }
-                        Some(direct_links)
-                    } else {
-                        None
-                    }
-                }).flatten().collect();
-
-                self.direct_links = direct_links;
-                self.filter_menu.hosts = set_filter_hosts(&self.direct_links);
-                self.display_links = filter_links(&self.direct_links, &self.filter_menu);
-
                 self.receivers.direct_links.take();
                 self.receivers.generating.take();
                 self.receivers.total_links.take();
                 self.timer.take();
+
+                self.filter_menu.hosts = set_filter_hosts(&self.direct_links);
             }
         };
     }
@@ -375,6 +377,10 @@ impl Download {
             ui.spinner();
             ui.label("Generating...");
             if ui.button("Cancel").clicked() {
+                //match self.receivers.cancel.unwrap().send(true) {
+                //    Ok(_) => {}
+                //    Err(error) => eprintln!("Error cancelling: {}", error)
+                //};
                 self.cancelled = true;
                 self.generating = false;
             }
@@ -420,28 +426,33 @@ impl ParsedTitle {
 static MULTIUP_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 static MIRROR_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 static PROJECT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+const MIRROR_PREFIX: &str = "https://multiup.org/en/mirror/";
 
 /// Convert short and long links to the en/mirror page. Removes duplicates
-pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
-    let mirror_prefix = "https://multiup.org/en/mirror/";
+fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
     let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://(www\.)?multiup\.org/(en/)?(download/)?"#).unwrap());
     let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/[^/]+/[^/]+$"#).unwrap());
     let project_regex = PROJECT_REGEX.get_or_init(|| regex::Regex::new(r#"^https:\/\/(www\.)?multiup\.org\/(en\/)?project\/.*$"#).unwrap());
 
-    let mut mirror_links: Vec<String> = Vec::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
+    let mut mirror_links: VecDeque<String> = VecDeque::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
     let (multiup_links_tx, multiup_links_rx) = crossbeam_channel::unbounded();
     for line in multiup_links.lines() {
         if !line.contains("multiup") {
             continue;
         }
+        let multiup_links_tx = multiup_links_tx.clone();
         let multiup_link = line.trim().split(' ').next().unwrap().to_string();
         if mirror_regex.is_match(&multiup_link) {
-            if !mirror_links.contains(&multiup_link) {
-                mirror_links.push(multiup_link.to_string());
+            let a = mirror_regex.replace(&multiup_link, "");
+            let parts: Vec<&str> = a.split('/').collect();
+            let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
+
+            if !mirror_links.contains(&fixed_link) {
+                mirror_links.push_back(fixed_link.to_string());
             }
         } else if project_regex.is_match(&multiup_link) {
             let rt = Runtime::new().unwrap();
-            let multiup_links_tx = multiup_links_tx.clone();
+
             thread::spawn(move || {
                 rt.block_on(async {
                     let multiup_links = match get_project_links(&multiup_link).await {
@@ -452,18 +463,22 @@ pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
                 });
             });
         } else if multiup_regex.is_match(&multiup_link) {
-            let suffix = multiup_regex.replace(&multiup_link, "");
-            let mut fixed_link = format!("{}{}", mirror_prefix, suffix);
-            if mirror_regex.is_match(&fixed_link) {
-                if !mirror_links.contains(&fixed_link) {
-                    mirror_links.push(fixed_link);
-                };
-            } else {
-                fixed_link.push_str("/a");
-                if mirror_regex.is_match(&fixed_link) && !mirror_links.contains(&fixed_link) {
-                    mirror_links.push(fixed_link);
-                };
+            let a = multiup_regex.replace(&multiup_link, "");
+            let parts: Vec<&str> = a.split('/').collect();
+            let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
+            if !mirror_links.contains(&fixed_link) {
+                mirror_links.push_back(fixed_link.to_string());
             }
+            //let rt = Runtime::new().unwrap();
+            //thread::spawn(move || {
+            //    rt.block_on(async {
+            //        let multiup_links = match get_mirror_link(&multiup_link).await {
+            //            Some(mirror_link) => fix_multiup_links(mirror_link.clone()),
+            //            None => vec![MirrorLink::new(multiup_link.to_string())]
+            //        };
+            //        let _ = multiup_links_tx.send(multiup_links);
+            //    });
+            //});
         }
     };
 
@@ -480,7 +495,7 @@ pub fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
                 }
             }
             Err(TryRecvError::Empty) => {
-                thread::sleep(Duration::from_millis(100));
+                //thread::sleep(Duration::from_millis(100));
             }
             Err(TryRecvError::Disconnected) => {
                 // Channel is disconnected
@@ -509,7 +524,31 @@ pub async fn get_project_links(url: &str) -> Option<String> {
     Some(links.inner_html().to_string())
 }
 
-pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>) {
+//static MIRROR_LINK_SELECTOR: OnceLock<Selector> = OnceLock::new();
+//
+//async fn get_mirror_link(url: &str) -> Option<String> {
+//    let client = Client::new();
+//    let html = match get_html(url, &client).await {
+//        Ok(html) => html,
+//        Err(_) => return None
+//    };
+//    let mirror_link_selector = MIRROR_LINK_SELECTOR.get_or_init(|| Selector::parse(r#"form[method="post"]"#).unwrap());
+//    let html = scraper::Html::parse_document(&html);
+//
+//    let button = match html.select(mirror_link_selector).next() {
+//        Some(button) => button,
+//        None => return None
+//    };
+//    let link = button.value().attr("action").unwrap();
+//    let ending = match link.strip_prefix("/fr/mirror/") {
+//        Some(link) => link,
+//        None => link
+//    };
+//
+//    Some(MIRROR_PREFIX.to_string() + ending)
+//}
+
+async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>) {
     let client = Client::new();
     let mut tasks = Vec::new();
     for (order, link) in mirror_links.iter().enumerate() {
@@ -523,24 +562,6 @@ pub async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_stat
     }
 
     let _ = futures::future::join_all(tasks).await;
-}
-
-#[test]
-fn test() {
-    let a = vec![DirectLink {
-        name_host: "!!!error".to_string(),
-        url: "a".to_string(),
-        validity: "invalid".to_string(),
-        displayed: false,
-    }];
-    if a.contains(&DirectLink {
-        name_host: "!!!error".to_string(),
-        url: "".to_string(),
-        validity: "".to_string(),
-        displayed: false,
-    }) {
-        println!("true");
-    }
 }
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
@@ -600,8 +621,8 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     let link_information = check_validity(&mirror_link.url).await;
     let direct_links: BTreeSet<DirectLink> = link_hosts.1.into_iter().map(|link| {
         let status = match link_information.hosts.get(&link.name_host) {
-            Some(validity) => validity.clone().unwrap(),
-            None => "unknown".to_string()
+            Some(Some(validity)) => validity.to_string(),
+            _ => "unknown".to_string()
         };
         DirectLink::new(link.name_host, link.url, status)
     }).collect();
