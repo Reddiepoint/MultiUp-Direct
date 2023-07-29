@@ -1,6 +1,6 @@
 [package]
-name = "MultiUp_Direct_2_4_1"
-version = "2.4.1"
+name = "MultiUp_Direct_2_5_0"
+version = "2.5.0"
 authors = ["Redpoint"]
 edition = "2021"
 
