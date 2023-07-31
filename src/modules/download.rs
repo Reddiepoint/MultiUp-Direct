@@ -432,7 +432,7 @@ const MIRROR_PREFIX: &str = "https://multiup.org/en/mirror/";
 /// Convert short and long links to the en/mirror page. Removes duplicates
 fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
     let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://(www\.)?multiup\.org/(en/)?(download/)?"#).unwrap());
-    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/[^/]+/[^/]+$"#).unwrap());
+    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/"#).unwrap());
     let project_regex = PROJECT_REGEX.get_or_init(|| regex::Regex::new(r#"^https:\/\/(www\.)?multiup\.org\/(en\/)?project\/.*$"#).unwrap());
 
     let mut mirror_links: VecDeque<String> = VecDeque::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
@@ -447,7 +447,6 @@ fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
             let a = mirror_regex.replace(&multiup_link, "");
             let parts: Vec<&str> = a.split('/').collect();
             let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
-
             if !mirror_links.contains(&fixed_link) {
                 mirror_links.push_back(fixed_link.to_string());
             }
