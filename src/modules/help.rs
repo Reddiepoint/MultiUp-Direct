@@ -66,91 +66,77 @@ impl Help {
     }
 
     pub fn show_help(ctx: &Context, open: &mut bool) {
-        Window::new("Help")
-            .open(open)
-            .show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
-                ui.label(HELP_MESSAGE);
-            }));
+        Window::new("Help").open(open).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
+            ui.label(HELP_MESSAGE);
+        }));
     }
 
     pub fn show_update(ctx: &Context, help: &mut Help) {
-        Window::new("Updates")
-            .open(&mut help.show_update)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.heading({
-                        match help.update_status {
-                            UpdateStatus::NotChecked => "Checking for updates...",
-                            UpdateStatus::Checking => "Checking for updates...",
-                            UpdateStatus::NotLatest => "There is an update available!",
-                            UpdateStatus::SameVersion => "You are up-to-date!",
-                        }
-                    });
-
-                    if let UpdateStatus::Checking = help.update_status {
-                        ui.spinner();
-                    };
+        Window::new("Updates").open(&mut help.show_update).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading({
+                    match help.update_status {
+                        UpdateStatus::NotChecked => "Checking for updates...",
+                        UpdateStatus::Checking => "Checking for updates...",
+                        UpdateStatus::NotLatest => "There is an update available!",
+                        UpdateStatus::SameVersion => "You are up-to-date!",
+                    }
                 });
 
-
-                ui.hyperlink_to("Homepage", HOMEPAGE);
-                let mut changelog_text = String::new();
-                for change in help.latest_changelog.iter() {
-                    changelog_text.push_str(&format!("- {}\n", change));
-                };
-
-                if !changelog_text.is_empty() {
-                    ui.separator();
-                    ui.heading(format!("What's new in v{}", help.latest_version));
-                    ui.label(changelog_text);
-                }
-
-                match help.update_status {
-                    UpdateStatus::NotChecked => {
-                        Help::is_updated(help.update_sender.clone().unwrap());
-                        help.update_status = UpdateStatus::Checking;
-                    }
-                    UpdateStatus::NotLatest => {}
-                    UpdateStatus::SameVersion => {}
-                    UpdateStatus::Checking => {
-                        if let Ok((latest_version, changelog)) = help.update_receiver.clone().unwrap().try_recv() {
-                            let app_version: Vec<u32> = latest_version
-                                .split('.')
-                                .map(|s| s.parse().unwrap())
-                                .collect();
-                            let homepage_version: Vec<u32> =
-                                VERSION.split('.').map(|s| s.parse().unwrap()).collect();
-                            match app_version.cmp(&homepage_version) {
-                                Ordering::Less => help.update_status = UpdateStatus::NotLatest,
-                                Ordering::Equal => help.update_status = UpdateStatus::SameVersion,
-                                Ordering::Greater => help.update_status = UpdateStatus::NotLatest,
-                            };
-                            help.latest_changelog = changelog;
-                            help.latest_version = latest_version;
-                        }
-                    }
+                if let UpdateStatus::Checking = help.update_status {
+                    ui.spinner();
                 };
             });
+
+
+            ui.hyperlink_to("Homepage", HOMEPAGE);
+            let mut changelog_text = String::new();
+            for change in help.latest_changelog.iter() {
+                changelog_text.push_str(&format!("- {}\n", change));
+            };
+
+            if !changelog_text.is_empty() {
+                ui.separator();
+                ui.heading(format!("What's new in v{}", help.latest_version));
+                ui.label(changelog_text);
+            }
+
+            match help.update_status {
+                UpdateStatus::NotChecked => {
+                    Help::is_updated(help.update_sender.clone().unwrap());
+                    help.update_status = UpdateStatus::Checking;
+                }
+                UpdateStatus::NotLatest => {}
+                UpdateStatus::SameVersion => {}
+                UpdateStatus::Checking => {
+                    if let Ok((latest_version, changelog)) = help.update_receiver.clone().unwrap().try_recv() {
+                        let app_version: Vec<u32> = latest_version.split('.').map(|s| s.parse().unwrap()).collect();
+                        let homepage_version: Vec<u32> = VERSION.split('.').map(|s| s.parse().unwrap()).collect();
+                        match app_version.cmp(&homepage_version) {
+                            Ordering::Less => help.update_status = UpdateStatus::NotLatest,
+                            Ordering::Equal => help.update_status = UpdateStatus::SameVersion,
+                            Ordering::Greater => help.update_status = UpdateStatus::NotLatest,
+                        };
+                        help.latest_changelog = changelog;
+                        help.latest_version = latest_version;
+                    }
+                }
+            };
+        });
     }
 
     pub fn is_updated(tx: Sender<(String, Vec<String>)>) {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36 Edge/12.0")
-            .build()
-            .unwrap();
+        let client = reqwest::Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36 Edge/12.0").build().unwrap();
         let version_selector = VERSION_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap());
         let changelog_selector = CHANGELOG_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap());
         thread::spawn(move || {
             rt.block_on(async {
-                let website_html = get_html(HOMEPAGE, &client).await.unwrap();
+                let (_cancel_tx, cancel_rx) = crossbeam_channel::unbounded();
+                let website_html = get_html(HOMEPAGE, &client, cancel_rx).await.unwrap();
                 let website_html = scraper::Html::parse_document(&website_html);
                 let latest_version = website_html.select(version_selector).next().unwrap();
-                let changelog = website_html.select(changelog_selector)
-                    .find(|element| element.text().collect::<Vec<_>>().join("") == "Changelog").unwrap()
-                    .parent_element().unwrap()
-                    .next_sibling_element().unwrap()
-                    .next_sibling_element().unwrap();
+                let changelog = website_html.select(changelog_selector).find(|element| element.text().collect::<Vec<_>>().join("") == "Changelog").unwrap().parent_element().unwrap().next_sibling_element().unwrap().next_sibling_element().unwrap();
                 let mut changelog_children = vec![];
                 let mut changelog_points = vec![];
                 for child in changelog.children() {

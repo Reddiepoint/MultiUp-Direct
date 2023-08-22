@@ -11,7 +11,7 @@ mod modules;
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,
-        initial_window_size: Some(egui::Vec2::new(1280.0, 720.0)),
+        initial_window_size: Some(egui::Vec2::new(1280.0, 800.0)),
         resizable: true,
         centered: true,
         ..Default::default()

@@ -1,16 +1,18 @@
 use std::collections::{BTreeSet, HashSet, VecDeque};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use async_recursion::async_recursion;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
-use eframe::egui::{Button, Checkbox, Label, ScrollArea, Sense, TextEdit, Ui};
+use eframe::egui::{Align, Button, Checkbox, Label, Layout, ScrollArea, Sense, TextEdit, Ui};
 use egui_extras::{Column, TableBuilder};
 use reqwest::{Client, StatusCode};
 use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
+use crate::modules::download::LinkError::Cancel;
 use crate::modules::filter::{filter_links, FilterMenu, set_filter_hosts};
 use crate::modules::links::{check_validity, DirectLink, LinkInformation, MirrorLink};
 
@@ -19,6 +21,7 @@ struct Receivers {
     direct_links: Option<Receiver<(usize, MirrorLink)>>,
     generating: Option<Receiver<bool>>,
     total_links: Option<Receiver<usize>>,
+    cancel: Option<Sender<bool>>,
 }
 
 impl Receivers {
@@ -26,11 +29,13 @@ impl Receivers {
         direct_links_receiver: Option<Receiver<(usize, MirrorLink)>>,
         generating_receiver: Option<Receiver<bool>>,
         total_links_receiver: Option<Receiver<usize>>,
+        cancel_receiver: Option<Sender<bool>>,
     ) -> Self {
         Self {
             direct_links: direct_links_receiver,
             generating: generating_receiver,
             total_links: total_links_receiver,
+            cancel: cancel_receiver,
         }
     }
 }
@@ -69,34 +74,36 @@ impl Download {
         ui.vertical(|ui| {
             ui.set_max_height(height); // Sets the input portion to half of the window
             let height = ui.available_height() / 2.0; // A quarter of the window
-            ScrollArea::vertical().id_source("Link Input Box").max_height(height).min_scrolled_height(height).min_scrolled_width(ui.available_width()).show(ui, |ui| {
+            ScrollArea::both().id_source("Link Input Box").max_height(height).min_scrolled_height(height).min_scrolled_width(ui.available_width()).show(ui, |ui| {
                 ui.add(TextEdit::multiline(&mut self.multiup_links).hint_text("Enter your Multiup links separated by a new line\n\
                         Supports short and long links, as well as older ones!").desired_width(ui.available_width())
                 )
             });
 
-            let height = ui.available_height() / 2.0; // Remaining height after input box to fill a quarter the window
 
             let mut link_information: Vec<(Option<LinkInformation>, &mut bool)> = self.mirror_links.iter_mut().map(|(_order, mirror_link, selected)| (mirror_link.information.clone(), selected)).collect();
 
             let mut selection = -1;
+
             if !link_information.is_empty() && link_information[0].0.is_some() {
                 ui.collapsing("Link Information", |ui| {
-                    ScrollArea::vertical().id_source("Link Information").min_scrolled_height(height).min_scrolled_width(ui.available_width() - 200.0).show(ui, |ui| {
-                        for i in 0..link_information.len() {
-                            let file = link_information[i].0.clone().unwrap();
-                            ui.horizontal(|ui| {
-                                let selected = &mut link_information[i].1;
+                    let width = ui.available_width() - 38.0;
+                    TableBuilder::new(ui).column(Column::auto()).column(Column::exact(width)).cell_layout(Layout::left_to_right(Align::Center)).body(|body| {
+                        body.rows(20.0, link_information.len(), |row_index, mut row| {
+                            let file = link_information[row_index].0.clone().unwrap();
+                            row.col(|ui| {
+                                let selected = &mut link_information[row_index].1;
                                 let checkbox = ui.add(Checkbox::new(selected, ""));
+
                                 let shift_is_down = ui.ctx().input(|ui| ui.modifiers.shift);
                                 if shift_is_down && checkbox.clicked() {
                                     if self.info_indices.0.is_none() {
-                                        self.info_indices.0 = Some(i);
+                                        self.info_indices.0 = Some(row_index);
                                     } else {
-                                        self.info_indices.1 = Some(i);
+                                        self.info_indices.1 = Some(row_index);
                                     }
                                 } else if checkbox.clicked() {
-                                    self.info_indices.0 = Some(i);
+                                    self.info_indices.0 = Some(row_index);
                                 }
                                 checkbox.context_menu(|ui| {
                                     if ui.button("Select all").clicked() {
@@ -107,6 +114,8 @@ impl Download {
                                         ui.close_menu();
                                     }
                                 });
+                            });
+                            row.col(|ui| {
                                 ui.label({
                                     let description = file.description.as_ref().map_or(String::new(), |desc| format!(" | {}", desc));
                                     format!("{}{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
@@ -119,8 +128,48 @@ impl Download {
                                     )
                                 });
                             });
-                        }
+                        });
                     });
+
+                    //ScrollArea::both().id_source("Link Information").min_scrolled_height(height).min_scrolled_width(width).show(ui, |ui| {
+                    //    for i in 0..link_information.len() {
+                    //        let file = link_information[i].0.clone().unwrap();
+                    //        ui.horizontal(|ui| {
+                    //            let selected = &mut link_information[i].1;
+                    //            let checkbox = ui.add(Checkbox::new(selected, ""));
+                    //            let shift_is_down = ui.ctx().input(|ui| ui.modifiers.shift);
+                    //            if shift_is_down && checkbox.clicked() {
+                    //                if self.info_indices.0.is_none() {
+                    //                    self.info_indices.0 = Some(i);
+                    //                } else {
+                    //                    self.info_indices.1 = Some(i);
+                    //                }
+                    //            } else if checkbox.clicked() {
+                    //                self.info_indices.0 = Some(i);
+                    //            }
+                    //            checkbox.context_menu(|ui| {
+                    //                if ui.button("Select all").clicked() {
+                    //                    selection = 1;
+                    //                    ui.close_menu();
+                    //                } else if ui.button("Deselect all").clicked() {
+                    //                    selection = 0;
+                    //                    ui.close_menu();
+                    //                }
+                    //            });
+                    //            ui.label({
+                    //                let description = file.description.as_ref().map_or(String::new(), |desc| format!(" | {}", desc));
+                    //                format!("{}{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
+                    //                        file.file_name,
+                    //                        description,
+                    //                        file.size,
+                    //                        file.date_upload,
+                    //                        file.time_upload,
+                    //                        file.number_downloads,
+                    //                )
+                    //            });
+                    //        });
+                    //    }
+                    //});
                 });
             };
 
@@ -155,11 +204,13 @@ impl Download {
                 let (direct_links_tx, direct_links_rx) = crossbeam_channel::bounded(200);
                 let (generating_tx, generating_rx) = crossbeam_channel::unbounded();
                 let (total_links_tx, total_links_rx) = crossbeam_channel::unbounded();
+                let (cancel_tx, cancel_rx) = crossbeam_channel::unbounded();
 
                 self.receivers = Receivers::new(
                     Some(direct_links_rx),
                     Some(generating_rx),
                     Some(total_links_rx),
+                    Some(cancel_tx),
                 );
 
                 let recheck_status = self.recheck_status;
@@ -169,7 +220,7 @@ impl Download {
 
                 thread::spawn(move || {
                     rt.block_on(async {
-                        let mut mirror_links = fix_multiup_links(multiup_links);
+                        let mut mirror_links = fix_multiup_links(multiup_links, cancel_rx.clone());
                         let length = mirror_links.len();
                         if length == 0 {
                             return;
@@ -179,6 +230,7 @@ impl Download {
                             &mut mirror_links,
                             recheck_status,
                             direct_links_tx,
+                            cancel_rx,
                         ).await;
                     });
                     let _ = generating_tx.send(false);
@@ -195,6 +247,8 @@ impl Download {
             self.update_total_number_of_links();
 
             self.update_direct_links();
+
+            self.display_cancel_button(ui);
 
             self.display_time_and_progress(ui);
 
@@ -218,7 +272,7 @@ impl Download {
 
                 let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
 
-                let width = ui.available_width() - 200.0;
+                let width = ui.available_width() - 220.0;
                 TableBuilder::new(ui).column(Column::exact(width)).body(|body| {
                     body.rows(18.0, self.display_links.len(), |row_index, mut row| {
                         let (_, link) = &self.display_links[row_index]; // get the link for the current row
@@ -362,6 +416,7 @@ impl Download {
                 self.receivers.direct_links.take();
                 self.receivers.generating.take();
                 self.receivers.total_links.take();
+                self.receivers.cancel.take();
                 self.timer.take();
 
                 self.filter_menu.hosts = set_filter_hosts(&self.direct_links);
@@ -369,26 +424,27 @@ impl Download {
         };
     }
 
-    fn display_time_and_progress(&mut self, ui: &mut Ui) {
-        if let Some(timer) = self.timer {
-            self.time_elapsed = timer.elapsed().as_millis();
-        };
-
+    fn display_cancel_button(&mut self, ui: &mut Ui) {
         if self.generating && !self.cancelled {
             ui.spinner();
             ui.label("Generating...");
             if ui.button("Cancel").clicked() {
-                //match self.receivers.cancel.unwrap().send(true) {
-                //    Ok(_) => {}
-                //    Err(error) => eprintln!("Error cancelling: {}", error)
-                //};
                 self.cancelled = true;
+                if let Some(tx) = &self.receivers.cancel {
+                    let _ = tx.send(true);
+                }
+
                 self.generating = false;
             }
         } else if self.cancelled {
             ui.label("Cancelled!");
         } else if self.total_number_of_links > 0 {
             ui.label("Generated!");
+        };
+    }
+    fn display_time_and_progress(&mut self, ui: &mut Ui) {
+        if let Some(timer) = self.timer {
+            self.time_elapsed = timer.elapsed().as_millis();
         };
 
         if self.time_elapsed != 0 { //&& self.total_number_of_links > 0           && (self.number_of_processed_links > 0 || self.total_number_of_links > 0)
@@ -430,7 +486,8 @@ static PROJECT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 const MIRROR_PREFIX: &str = "https://multiup.org/en/mirror/";
 
 /// Convert short and long links to the en/mirror page. Removes duplicates
-fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
+
+fn fix_multiup_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<MirrorLink> {
     let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://(www\.)?multiup\.org/(en/)?(download/)?"#).unwrap());
     let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/"#).unwrap());
     let project_regex = PROJECT_REGEX.get_or_init(|| regex::Regex::new(r#"^https:\/\/(www\.)?multiup\.org\/(en\/)?project\/.*$"#).unwrap());
@@ -452,11 +509,11 @@ fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
             }
         } else if project_regex.is_match(&multiup_link) {
             let rt = Runtime::new().unwrap();
-
+            let cancel_rx = cancel_rx.clone();
             thread::spawn(move || {
                 rt.block_on(async {
-                    let multiup_links = match get_project_links(&multiup_link).await {
-                        Some(project_links) => fix_multiup_links(project_links.clone()),
+                    let multiup_links = match get_project_links(&multiup_link, cancel_rx.clone()).await {
+                        Some(project_links) => fix_multiup_links(project_links.clone(), cancel_rx.clone()),
                         None => vec![MirrorLink::new(multiup_link.to_string())]
                     };
                     let _ = multiup_links_tx.send(multiup_links);
@@ -509,9 +566,9 @@ fn fix_multiup_links(multiup_links: String) -> Vec<MirrorLink> {
 
 static PROJECT_LINKS_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
-pub async fn get_project_links(url: &str) -> Option<String> {
+pub async fn get_project_links(url: &str, cancel_rx: Receiver<bool>) -> Option<String> {
     let client = Client::new();
-    let html = match get_html(url, &client).await {
+    let html = match get_html(url, &client, cancel_rx).await {
         Ok(html) => html,
         Err(_) => return None
     };
@@ -548,24 +605,42 @@ pub async fn get_project_links(url: &str) -> Option<String> {
 //    Some(MIRROR_PREFIX.to_string() + ending)
 //}
 
-async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>) {
+async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>, cancel_rx: Receiver<bool>) {
     let client = Client::new();
     let mut tasks = Vec::new();
-    for (order, link) in mirror_links.iter().enumerate() {
-        let direct_links_tx = direct_links_tx.clone();
-        let mut mirror_link = link.clone();
-        let client = client.clone();
-        tasks.push(tokio::spawn(async move {
-            let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client).await;
-            let _ = direct_links_tx.send((order, mirror_link));
-        }));
+
+    if recheck_status {
+        for (order, link) in mirror_links.iter().enumerate() {
+            let direct_links_tx = direct_links_tx.clone();
+            let mut mirror_link = link.clone();
+            let client = client.clone();
+            let cancel_rx = cancel_rx.clone();
+            tasks.push(tokio::spawn(async move {
+                let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
+                let _ = direct_links_tx.send((order, mirror_link));
+            }));
+        }
+    } else {
+        let semaphore = Arc::new(Semaphore::new(50)); // limit the number of concurrent tasks to 5
+        for (order, link) in mirror_links.iter().enumerate() {
+            let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Acquire semaphore");
+            let direct_links_tx = direct_links_tx.clone();
+            let mut mirror_link = link.clone();
+            let client = client.clone();
+            let cancel_rx = cancel_rx.clone();
+            tasks.push(tokio::spawn(async move {
+                let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
+                let _ = direct_links_tx.send((order, mirror_link));
+                drop(permit);
+            }));
+        }
     }
 
     let _ = futures::future::join_all(tasks).await;
 }
 
-async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client) -> MirrorLink {
-    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client).await;
+async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client, cancel_rx: Receiver<bool>) -> MirrorLink {
+    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client, cancel_rx).await;
     if link_hosts.1.contains(&DirectLink {
         name_host: "!!!error".to_string(),
         url: "".to_string(),
@@ -637,24 +712,24 @@ static FILE_NAME_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 #[async_recursion]
-async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, BTreeSet<DirectLink>) {
+async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> (ParsedTitle, BTreeSet<DirectLink>) {
     // Regular links
     let mut links: BTreeSet<DirectLink> = BTreeSet::new();
     // Scrape panel
     //let now = Instant::now();
-    let html = match get_html(url, client).await {
+    let html = match get_html(url, client, cancel_rx.clone()).await {
         Ok(html) => html,
         Err(error) => {
             let error = match error {
-                LinkError::ReqwestError(error) => error.to_string(),
-                LinkError::InvalidError => "Invalid link".to_string()
+                LinkError::Reqwest(error) => {
+                    error.without_url().to_string()
+                }
+                LinkError::Invalid => "Invalid link".to_string(),
+                Cancel => "Cancelled".to_string(),
             };
             return (ParsedTitle::default(), BTreeSet::from([DirectLink::new("!!!error".to_string(), error.to_string(), "invalid".to_string())]));
         }
     };
-    //println!("{}", html);
-    //let after = Instant::now();
-    //println!("Time taken to load: {}", (after - now).as_millis());
 
     let selector = SELECTOR.get_or_init(|| Selector::parse(r#"a.host, button.host"#).unwrap()); //button[type="submit"]
     let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
@@ -680,6 +755,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, BTre
 
         if let Some(element) = website_html.select(queue_selector).next() {
             if links.is_empty() {
+                //println!("{}", html);
                 if let Some(element) = element.next_sibling_element() {
                     let text = element.inner_html().replace(r#"<strong class="amount">"#, "").replace("</strong>", "").trim().to_string();
                     let queue_status = if text == "File not found on servers" {
@@ -699,7 +775,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client) -> (ParsedTitle, BTre
 
     if links.is_empty() {
         links.insert(DirectLink::new("!!!error".to_string(), "No hosts found".to_string(), "invalid".to_string()));
-        return scrape_link_for_hosts(url, client).await;
+        return scrape_link_for_hosts(url, client, cancel_rx).await;
     }
 
     let website_html = scraper::Html::parse_document(&html);
@@ -723,15 +799,22 @@ fn parse_title(input: &str) -> ParsedTitle {
 
 #[derive(Debug)]
 pub enum LinkError {
-    ReqwestError(reqwest::Error),
-    InvalidError,
+    Reqwest(reqwest::Error),
+    Invalid,
+    Cancel,
 }
 
 #[async_recursion]
-pub async fn get_html(url: &str, client: &Client) -> Result<String, LinkError> {
+pub async fn get_html(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> Result<String, LinkError> {
+    match cancel_rx.try_recv() {
+        Ok(_) | Err(TryRecvError::Disconnected) => {
+            return Err(Cancel);
+        }
+        Err(TryRecvError::Empty) => {}
+    };
     let a = match client.get(url).send().await {
         Ok(response) => response,
-        Err(error) => return Err(LinkError::ReqwestError(error))
+        Err(error) => return Err(LinkError::Reqwest(error))
     };
     match a.error_for_status() {
         Ok(res) => Ok(res.text().await.unwrap().to_string()),
@@ -739,9 +822,9 @@ pub async fn get_html(url: &str, client: &Client) -> Result<String, LinkError> {
             if error.status().unwrap() != StatusCode::NOT_FOUND {
                 let _ = tokio::time::sleep(Duration::from_millis(100)).await;
                 //eprintln!("{error}");
-                return get_html(url, client).await;
+                //return get_html(url, client, cancel_rx).await;
             }
-            Err(LinkError::InvalidError)
+            Err(LinkError::Invalid)
         }
     }
 }

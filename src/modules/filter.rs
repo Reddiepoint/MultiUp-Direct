@@ -28,7 +28,7 @@ impl Default for FilterMenu {
 impl FilterMenu {
     pub fn show(ui: &mut Ui, filter: &mut FilterMenu) {
         ui.vertical(|ui| {
-            ui.set_max_width(150.0);
+            ui.set_max_width(200.0);
             ui.label("Host status: ");
             ui.checkbox(&mut filter.valid, "Valid");
             ui.checkbox(&mut filter.invalid, "Invalid");
@@ -54,21 +54,15 @@ impl FilterMenu {
             ui.separator();
 
             ScrollArea::vertical().id_source("Host Filter").min_scrolled_height(ui.available_height()).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 for i in 0..filter.hosts.len() {
                     let host = &mut filter.hosts[i];
                     let host_name = &host.0.clone();
                     let checkbox = ui.checkbox(&mut host.1, host_name);
                     checkbox.context_menu(|ui| {
-                        if ui
-                            .button(format!("Select {} links only", host_name))
-                            .clicked()
-                        {
+                        if ui.button(format!("Select {} links only", host_name)).clicked() {
                             for host in filter.hosts.iter_mut() {
-                                if &host.0 == host_name {
-                                    host.1 = true;
-                                } else {
-                                    host.1 = false;
-                                };
+                                host.1 = &host.0 == host_name;
                             };
                             ui.close_menu();
                         }
@@ -80,22 +74,16 @@ impl FilterMenu {
 }
 
 pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<(bool, String)> {
-    links
-        .iter()
-        .filter(|link| link.displayed)
-        .filter(|link| match link.validity.as_str() {
-            "valid" => filter.valid,
-            "invalid" => filter.invalid,
-            "unknown" => filter.unknown,
-            _ => filter.unchecked,
-        })
-        .filter(|link| {
-            filter.hosts.iter().any(|(host_name, selected)| *selected && &link.name_host == host_name)
-        })
-        .map(|link| {
-            (link.displayed, link.url.to_string())
-        })
-        .collect()
+    links.iter().filter(|link| link.displayed).filter(|link| match link.validity.as_str() {
+        "valid" => filter.valid,
+        "invalid" => filter.invalid,
+        "unknown" => filter.unknown,
+        _ => filter.unchecked,
+    }).filter(|link| {
+        filter.hosts.iter().any(|(host_name, selected)| *selected && &link.name_host == host_name)
+    }).map(|link| {
+        (link.displayed, link.url.to_string())
+    }).collect()
 }
 
 pub fn set_filter_hosts(links: &[DirectLink]) -> Vec<(String, bool)> {
