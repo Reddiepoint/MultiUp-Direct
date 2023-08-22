@@ -130,46 +130,6 @@ impl Download {
                             });
                         });
                     });
-
-                    //ScrollArea::both().id_source("Link Information").min_scrolled_height(height).min_scrolled_width(width).show(ui, |ui| {
-                    //    for i in 0..link_information.len() {
-                    //        let file = link_information[i].0.clone().unwrap();
-                    //        ui.horizontal(|ui| {
-                    //            let selected = &mut link_information[i].1;
-                    //            let checkbox = ui.add(Checkbox::new(selected, ""));
-                    //            let shift_is_down = ui.ctx().input(|ui| ui.modifiers.shift);
-                    //            if shift_is_down && checkbox.clicked() {
-                    //                if self.info_indices.0.is_none() {
-                    //                    self.info_indices.0 = Some(i);
-                    //                } else {
-                    //                    self.info_indices.1 = Some(i);
-                    //                }
-                    //            } else if checkbox.clicked() {
-                    //                self.info_indices.0 = Some(i);
-                    //            }
-                    //            checkbox.context_menu(|ui| {
-                    //                if ui.button("Select all").clicked() {
-                    //                    selection = 1;
-                    //                    ui.close_menu();
-                    //                } else if ui.button("Deselect all").clicked() {
-                    //                    selection = 0;
-                    //                    ui.close_menu();
-                    //                }
-                    //            });
-                    //            ui.label({
-                    //                let description = file.description.as_ref().map_or(String::new(), |desc| format!(" | {}", desc));
-                    //                format!("{}{} ({} bytes). Uploaded {} ({} seconds). Total downloads: {}",
-                    //                        file.file_name,
-                    //                        description,
-                    //                        file.size,
-                    //                        file.date_upload,
-                    //                        file.time_upload,
-                    //                        file.number_downloads,
-                    //                )
-                    //            });
-                    //        });
-                    //    }
-                    //});
                 });
             };
 
@@ -526,16 +486,6 @@ fn fix_multiup_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<Mi
             if !mirror_links.contains(&fixed_link) {
                 mirror_links.push_back(fixed_link.to_string());
             }
-            //let rt = Runtime::new().unwrap();
-            //thread::spawn(move || {
-            //    rt.block_on(async {
-            //        let multiup_links = match get_mirror_link(&multiup_link).await {
-            //            Some(mirror_link) => fix_multiup_links(mirror_link.clone()),
-            //            None => vec![MirrorLink::new(multiup_link.to_string())]
-            //        };
-            //        let _ = multiup_links_tx.send(multiup_links);
-            //    });
-            //});
         }
     };
 
@@ -580,30 +530,6 @@ pub async fn get_project_links(url: &str, cancel_rx: Receiver<bool>) -> Option<S
     };
     Some(links.inner_html().to_string())
 }
-
-//static MIRROR_LINK_SELECTOR: OnceLock<Selector> = OnceLock::new();
-//
-//async fn get_mirror_link(url: &str) -> Option<String> {
-//    let client = Client::new();
-//    let html = match get_html(url, &client).await {
-//        Ok(html) => html,
-//        Err(_) => return None
-//    };
-//    let mirror_link_selector = MIRROR_LINK_SELECTOR.get_or_init(|| Selector::parse(r#"form[method="post"]"#).unwrap());
-//    let html = scraper::Html::parse_document(&html);
-//
-//    let button = match html.select(mirror_link_selector).next() {
-//        Some(button) => button,
-//        None => return None
-//    };
-//    let link = button.value().attr("action").unwrap();
-//    let ending = match link.strip_prefix("/fr/mirror/") {
-//        Some(link) => link,
-//        None => link
-//    };
-//
-//    Some(MIRROR_PREFIX.to_string() + ending)
-//}
 
 async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>, cancel_rx: Receiver<bool>) {
     let client = Client::new();
@@ -654,7 +580,6 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
             Some(url) => url.to_string(),
             None => url
         };
-        //println!("{error} - {url}");
         mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("!!!error".to_string(), format!("{} - {}", error, url), "invalid".to_string())]));
         mirror_link.information = Some(LinkInformation {
             error: "invalid".to_string(),
@@ -821,8 +746,6 @@ pub async fn get_html(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> 
         Err(error) => {
             if error.status().unwrap() != StatusCode::NOT_FOUND {
                 let _ = tokio::time::sleep(Duration::from_millis(100)).await;
-                //eprintln!("{error}");
-                //return get_html(url, client, cancel_rx).await;
             }
             Err(LinkError::Invalid)
         }
