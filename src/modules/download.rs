@@ -547,7 +547,7 @@ async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: 
             }));
         }
     } else {
-        let semaphore = Arc::new(Semaphore::new(50)); // limit the number of concurrent tasks to 5
+        let semaphore = Arc::new(Semaphore::new(100)); // limit the number of concurrent tasks to 5
         for (order, link) in mirror_links.iter().enumerate() {
             let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Acquire semaphore");
             let direct_links_tx = direct_links_tx.clone();
