@@ -443,51 +443,61 @@ impl ParsedTitle {
 static MULTIUP_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 static MIRROR_REGEX: OnceLock<regex::Regex> = OnceLock::new();
 static PROJECT_REGEX: OnceLock<regex::Regex> = OnceLock::new();
-const MIRROR_PREFIX: &str = "https://multiup.org/en/mirror/";
+static LINK_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 
 /// Convert short and long links to the en/mirror page. Removes duplicates
 
 fn fix_multiup_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<MirrorLink> {
-    let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://(www\.)?multiup\.org/(en/)?(download/)?"#).unwrap());
-    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r#"^https?://multiup\.org/en/mirror/"#).unwrap());
-    let project_regex = PROJECT_REGEX.get_or_init(|| regex::Regex::new(r#"^https:\/\/(www\.)?multiup\.org\/(en\/)?project\/.*$"#).unwrap());
-
+    let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r"https?://(www\.)?multiup\.(org|io)/(en/)?(download/)?").unwrap());
+    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r"https?://multiup\.(org|io)/en/mirror/").unwrap());
+    let project_regex = PROJECT_REGEX.get_or_init(|| {
+        regex::Regex::new(r"^https://(www\.)?multiup\.(org|io)/(en/)?project/.*$").unwrap()
+    });
+    let link_regex = LINK_REGEX.get_or_init(|| regex::Regex::new(r"(https?://\S+)").unwrap()); // Regex to match any link in a string
     let mut mirror_links: VecDeque<String> = VecDeque::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
     let (multiup_links_tx, multiup_links_rx) = crossbeam_channel::unbounded();
     for line in multiup_links.lines() {
-        if !line.contains("multiup") {
-            continue;
-        }
         let multiup_links_tx = multiup_links_tx.clone();
-        let multiup_link = line.trim().split(' ').next().unwrap().to_string();
-        if mirror_regex.is_match(&multiup_link) {
-            let a = mirror_regex.replace(&multiup_link, "");
-            let parts: Vec<&str> = a.split('/').collect();
-            let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
-            if !mirror_links.contains(&fixed_link) {
-                mirror_links.push_back(fixed_link.to_string());
+        let mut links: Vec<String> = Vec::new();
+        for link in link_regex.captures_iter(line) {
+            links.push(link[1].replace('"', ""));
+        }
+        for multiup_link in links {
+            if !multiup_link.contains("multiup") {
+                continue;
             }
-        } else if project_regex.is_match(&multiup_link) {
-            let rt = Runtime::new().unwrap();
-            let cancel_rx = cancel_rx.clone();
-            thread::spawn(move || {
-                rt.block_on(async {
-                    let multiup_links = match get_project_links(&multiup_link, cancel_rx.clone()).await {
-                        Some(project_links) => fix_multiup_links(project_links.clone(), cancel_rx.clone()),
-                        None => vec![MirrorLink::new(multiup_link.to_string())]
-                    };
-                    let _ = multiup_links_tx.send(multiup_links);
+            if mirror_regex.is_match(&multiup_link) {
+                let a = mirror_regex.replace(&multiup_link, "");
+                let parts: Vec<&str> = a.split('/').collect();
+                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
+                if !mirror_links.contains(&fixed_link) {
+                    mirror_links.push_back(fixed_link.to_string());
+                }
+            } else if project_regex.is_match(&multiup_link) {
+                let rt = Runtime::new().unwrap();
+                let cancel_rx = cancel_rx.clone();
+                let multiup_links_tx = multiup_links_tx.clone();
+                thread::spawn(move || {
+                    rt.block_on(async {
+                        let multiup_links = match get_project_links(&multiup_link, cancel_rx.clone()).await {
+                            Some(project_links) => fix_multiup_links(project_links.clone(), cancel_rx.clone()),
+                            None => vec![MirrorLink::new(multiup_link.to_string())]
+                        };
+                        let _ = multiup_links_tx.send(multiup_links);
+                    });
                 });
-            });
-        } else if multiup_regex.is_match(&multiup_link) {
-            let a = multiup_regex.replace(&multiup_link, "");
-            let parts: Vec<&str> = a.split('/').collect();
-            let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
-            if !mirror_links.contains(&fixed_link) {
-                mirror_links.push_back(fixed_link.to_string());
+            } else if multiup_regex.is_match(&multiup_link) {
+                let a = multiup_regex.replace(&multiup_link, "");
+                let parts: Vec<&str> = a.split('/').collect();
+                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
+                if !mirror_links.contains(&fixed_link) {
+                    mirror_links.push_back(fixed_link.to_string());
+                }
             }
         }
     };
+
 
     drop(multiup_links_tx);
     let mut mirror_links: Vec<MirrorLink> = mirror_links.iter().map(|link| MirrorLink::new(link.to_string())).collect();
@@ -680,7 +690,6 @@ async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<b
 
         if let Some(element) = website_html.select(queue_selector).next() {
             if links.is_empty() {
-                //println!("{}", html);
                 if let Some(element) = element.next_sibling_element() {
                     let text = element.inner_html().replace(r#"<strong class="amount">"#, "").replace("</strong>", "").trim().to_string();
                     let queue_status = if text == "File not found on servers" {
@@ -690,7 +699,7 @@ async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<b
                     } else if text.parse::<u16>().is_ok() {
                         format!("In queue ({})", text)
                     } else {
-                        text
+                        "Unknown error - the link may be protected by a password or captcha".to_string()
                     };
                     links.insert(DirectLink::new("!!!error".to_string(), queue_status.to_string(), "invalid".to_string()));
                 }
@@ -712,14 +721,24 @@ async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<b
 fn parse_title(input: &str) -> ParsedTitle {
     let input = input.trim();
     let parts: Vec<&str> = input.split_whitespace().collect();
-    if parts.len() >= 3 {
+    if parts.last().unwrap() == &")" {
         let file_name = parts[3..parts.len() - 4].join(" ");
         let size = parts[parts.len() - 3].parse::<f64>().unwrap_or(0.0);
         let unit = parts[parts.len() - 2];
         ParsedTitle::new(file_name, size, unit.to_string())
+    } else if parts[1] == "Project" || parts[1] == "Projet" {
+        let file_name = parts[1..parts.len() - 1].join(" ");
+        ParsedTitle::new(file_name, 0.0, String::new())
     } else {
         ParsedTitle::new(String::new(), 0.0, String::new())
     }
+}
+
+#[test]
+fn test_parse() {
+    let title = parse_title(" / Project Crusader Kings III v.1.9.2.1 (e5aa824b08cc2aca32ddb33141f30854)");
+    //let title = parse_title(" / Mirror list MultiUp_Direct_2_6_0.exe ( 8.20 MB )");
+    println!("{}", title.file_name)
 }
 
 #[derive(Debug)]
