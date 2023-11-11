@@ -180,7 +180,7 @@ impl Download {
 
                 thread::spawn(move || {
                     rt.block_on(async {
-                        let mut mirror_links = fix_multiup_links(multiup_links, cancel_rx.clone());
+                        let mut mirror_links = convert_links_to_mirror_links(multiup_links, cancel_rx.clone());
                         let length = mirror_links.len();
                         if length == 0 {
                             return;
@@ -448,59 +448,72 @@ const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 
 /// Convert short and long links to the en/mirror page. Removes duplicates
 
-fn fix_multiup_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<MirrorLink> {
-    let multiup_regex = MULTIUP_REGEX.get_or_init(|| regex::Regex::new(r"https?://(www\.)?multiup\.(org|io)/(en/)?(download/)?").unwrap());
-    let mirror_regex = MIRROR_REGEX.get_or_init(|| regex::Regex::new(r"https?://multiup\.(org|io)/en/mirror/").unwrap());
-    let project_regex = PROJECT_REGEX.get_or_init(|| {
-        regex::Regex::new(r"^https://(www\.)?multiup\.(org|io)/(en/)?project/.*$").unwrap()
-    });
-    let link_regex = LINK_REGEX.get_or_init(|| regex::Regex::new(r"(https?://\S+)").unwrap()); // Regex to match any link in a string
-    let mut mirror_links: VecDeque<String> = VecDeque::with_capacity(multiup_links.lines().count()); // Pre-allocate memory for the vector
+fn convert_links_to_mirror_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<MirrorLink> {
+    // Set up regex
+    // Normal multiup link
+    let multiup_regex = MULTIUP_REGEX.get_or_init(||
+        regex::Regex::new(r"https?://(www\.)?multiup\.(org|io)/(en/)?(download/)?").unwrap());
+    // Mirror multiup link
+    let mirror_regex = MIRROR_REGEX.get_or_init(||
+        regex::Regex::new(r"https?://multiup\.(org|io)/en/mirror/").unwrap());
+    // Project multiup link
+    let project_regex = PROJECT_REGEX.get_or_init(||
+        regex::Regex::new(r"^https://(www\.)?multiup\.(org|io)/(en/)?project/.*$").unwrap());
+    // Regex to recognise all types of multiup links
+    let link_regex = LINK_REGEX.get_or_init(||
+        regex::Regex::new(r"(https?://(www\.)?multiup\.(org|io)/\S+)").unwrap());
+
+    // Pre-allocate memory for the vector (original link, mirror link)
+    let mut mirror_links: VecDeque<(String, String)> = VecDeque::with_capacity(multiup_links.lines().count());
     let (multiup_links_tx, multiup_links_rx) = crossbeam_channel::unbounded();
+
+    // Main logic
     for line in multiup_links.lines() {
-        let multiup_links_tx = multiup_links_tx.clone();
+        // Vec for all types of links
         let mut links: Vec<String> = Vec::new();
+        // Replace " with nothing (for HTML code as input)
         for link in link_regex.captures_iter(line) {
             links.push(link[1].replace('"', ""));
         }
-        for multiup_link in links {
-            if !multiup_link.contains("multiup") {
-                continue;
-            }
-            if mirror_regex.is_match(&multiup_link) {
-                let a = mirror_regex.replace(&multiup_link, "");
-                let parts: Vec<&str> = a.split('/').collect();
-                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
-                if !mirror_links.contains(&fixed_link) {
-                    mirror_links.push_back(fixed_link.to_string());
+
+        for original_link in links {
+            if mirror_regex.is_match(&original_link) {
+                // Check if url starts with mirror prefix
+                let parts = mirror_regex.replace(&original_link, "");
+                let id: Vec<&str> = parts.split('/').collect();
+                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, id[0]);
+                if !mirror_links.iter().any(|(_, mirror_link)| mirror_link == &fixed_link) {
+                    mirror_links.push_back((original_link, fixed_link));
                 }
-            } else if project_regex.is_match(&multiup_link) {
+            } else if multiup_regex.is_match(&original_link) {
+                // Check if url starts with normal (download) prefix
+                let parts = multiup_regex.replace(&original_link, "");
+                let id: Vec<&str> = parts.split('/').collect();
+                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, id[0]);
+                if !mirror_links.iter().any(|(_, mirror_link)| mirror_link == &fixed_link) {
+                    mirror_links.push_back((original_link, fixed_link));
+                }
+            } else if project_regex.is_match(&original_link) {
+                //  Check if url starts with project prefix
                 let rt = Runtime::new().unwrap();
                 let cancel_rx = cancel_rx.clone();
                 let multiup_links_tx = multiup_links_tx.clone();
                 thread::spawn(move || {
                     rt.block_on(async {
-                        let multiup_links = match get_project_links(&multiup_link, cancel_rx.clone()).await {
-                            Some(project_links) => fix_multiup_links(project_links.clone(), cancel_rx.clone()),
-                            None => vec![MirrorLink::new(multiup_link.to_string())]
+                        let multiup_links = match get_project_links(&original_link, cancel_rx.clone()).await {
+                            Some(project_links) => convert_links_to_mirror_links(project_links.clone(), cancel_rx.clone()),
+                            None => vec![MirrorLink::new(original_link.to_string(), original_link.to_string())]
                         };
                         let _ = multiup_links_tx.send(multiup_links);
                     });
                 });
-            } else if multiup_regex.is_match(&multiup_link) {
-                let a = multiup_regex.replace(&multiup_link, "");
-                let parts: Vec<&str> = a.split('/').collect();
-                let fixed_link = format!("{}{}/a", MIRROR_PREFIX, parts[0]);
-                if !mirror_links.contains(&fixed_link) {
-                    mirror_links.push_back(fixed_link.to_string());
-                }
             }
         }
     };
 
-
-    drop(multiup_links_tx);
-    let mut mirror_links: Vec<MirrorLink> = mirror_links.iter().map(|link| MirrorLink::new(link.to_string())).collect();
+    drop(multiup_links_tx); // Disconnect channel after all the work is done
+    let mut mirror_links: Vec<MirrorLink> = mirror_links.iter().map(|(original_link, mirror_link)|
+        MirrorLink::new(original_link.to_string(), mirror_link.to_string())).collect();
 
     loop {
         match multiup_links_rx.try_recv() {
@@ -512,10 +525,10 @@ fn fix_multiup_links(multiup_links: String, cancel_rx: Receiver<bool>) -> Vec<Mi
                 }
             }
             Err(TryRecvError::Empty) => {
-                //thread::sleep(Duration::from_millis(100));
+                // Do nothing
             }
             Err(TryRecvError::Disconnected) => {
-                // Channel is disconnected
+                // Finished
                 break;
             }
         }
@@ -576,14 +589,14 @@ async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: 
 }
 
 async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client, cancel_rx: Receiver<bool>) -> MirrorLink {
-    let link_hosts = scrape_link_for_hosts(&mirror_link.url, client, cancel_rx).await;
+    let link_hosts = scrape_link_for_hosts(&mirror_link.mirror_url, client, cancel_rx).await;
     if link_hosts.1.contains(&DirectLink {
         name_host: "!!!error".to_string(),
         url: "".to_string(),
         validity: "".to_string(),
         displayed: false,
     }) {
-        let url = mirror_link.url.clone();
+        let url = mirror_link.mirror_url.clone();
         let error = link_hosts.1.first().unwrap().url.clone();
 
         let url = match url.strip_suffix("/a") {
@@ -628,7 +641,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
         });
         return std::mem::take(mirror_link);
     }
-    let link_information = check_validity(&mirror_link.url).await;
+    let link_information = check_validity(&mirror_link.mirror_url).await;
     let direct_links: BTreeSet<DirectLink> = link_hosts.1.into_iter().map(|link| {
         let status = match link_information.hosts.get(&link.name_host) {
             Some(Some(validity)) => validity.to_string(),

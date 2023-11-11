@@ -44,21 +44,23 @@ impl DirectLink {
 /// Contains the fixed mirror link and possibly the generated direct links
 #[derive(Default, Clone)]
 pub struct MirrorLink {
-    pub url: String,
+    pub original_url: String,
+    pub mirror_url: String,
     pub direct_links: Option<BTreeSet<DirectLink>>,
     pub information: Option<LinkInformation>,
 }
 
 impl PartialEq for MirrorLink {
     fn eq(&self, other: &Self) -> bool {
-        self.url == other.url
+        self.mirror_url == other.mirror_url
     }
 }
 
 impl MirrorLink {
-    pub fn new(url: String) -> Self {
+    pub fn new(original_url: String, mirror_url: String) -> Self {
         Self {
-            url,
+            original_url,
+            mirror_url,
             direct_links: None,
             information: None,
         }
@@ -79,18 +81,19 @@ pub struct LinkInformation {
 }
 
 #[derive(Serialize)]
-pub struct Url {
-    pub link: String,
+struct Url {
+    link: String,
 }
 
 #[async_recursion]
 pub async fn check_validity(url: &str) -> LinkInformation {
     let client = reqwest::Client::new();
     match client.post("https://multiup.org/api/check-file")
-        .form(&Url { link: url.to_string() })
+        .json(&Url { link: url.to_string() })
         .send().await.unwrap().json::<LinkInformation>().await {
         Ok(information) => information,
-        Err(_error) => {
+        Err(error) => {
+            println!("{}", error);
             LinkInformation {
                 error: "error".to_string(),
                 file_name: "File not available".to_string(),
@@ -104,6 +107,7 @@ pub async fn check_validity(url: &str) -> LinkInformation {
             }
         }
     }
+
 }
 
 //pub fn get_available_hosts() -> Vec<String> {

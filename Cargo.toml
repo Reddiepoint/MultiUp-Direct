@@ -13,19 +13,19 @@ lto = "fat"
 
 
 [dependencies]
-async-recursion = { version = "1.0.4" }
+async-recursion = { version = "1.0.5" }
 crossbeam-channel = { version = "0.5.8" }
 eframe = { version = "0.23.0" }
 egui_extras = { version = "0.23.0" }
-futures = { version = "0.3.28" }
-reqwest = { version = "0.11.18", features = ["json"] }
-regex = { version = "1.8.4" }
+futures = { version = "0.3.29" }
+reqwest = { version = "0.11.22", features = ["json"] }
+regex = { version = "1.10.2" }
 scraper = { version = "0.18.1" }
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = { version = "1.0.96" }
-tokio = { version = "1.28.2", features = ["full"] }
-tokio-util = { version = "0.7.7" }
-webbrowser = { version = "0.8.9" }
+serde = { version = "1.0.192", features = ["derive"] }
+serde_json = { version = "1.0.108" }
+tokio = { version = "1.34.0", features = ["full"] }
+tokio-util = { version = "0.7.10" }
+webbrowser = { version = "0.8.12" }
 
 
 [dev-dependencies]
