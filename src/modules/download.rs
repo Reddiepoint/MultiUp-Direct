@@ -11,10 +11,10 @@ use reqwest::{Client, StatusCode};
 use scraper::{Element, Selector};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
-use crate::modules::download::LinkError::Cancel;
 use crate::modules::filter::{filter_links, FilterMenu, set_filter_hosts};
-use crate::modules::links::{check_validity, DirectLink, LinkInformation, MirrorLink};
+use crate::modules::links::{check_validity, DirectLink, FileInformation, MirrorLink};
 
 #[derive(Default)]
 struct Receivers {
@@ -81,7 +81,7 @@ impl Download {
             });
 
 
-            let mut link_information: Vec<(Option<LinkInformation>, &mut bool)> = self.mirror_links.iter_mut().map(|(_order, mirror_link, selected)| (mirror_link.information.clone(), selected)).collect();
+            let mut link_information: Vec<(Option<FileInformation>, &mut bool)> = self.mirror_links.iter_mut().map(|(_order, mirror_link, selected)| (mirror_link.file_information.clone(), selected)).collect();
 
             let mut selection = -1;
 
@@ -186,7 +186,7 @@ impl Download {
                             return;
                         }
                         let _ = total_links_tx.send(mirror_links.len());
-                        generate_direct_links(
+                        grab_direct_links(
                             &mut mirror_links,
                             recheck_status,
                             direct_links_tx,
@@ -424,15 +424,15 @@ impl Download {
 }
 
 #[derive(Default)]
-pub struct ParsedTitle {
+pub struct FileMetadata {
     pub file_name: String,
     pub size: f64,
     pub unit: String,
 }
 
-impl ParsedTitle {
+impl FileMetadata {
     pub fn new(file_name: String, size: f64, unit: String) -> Self {
-        ParsedTitle {
+        FileMetadata {
             file_name,
             size,
             unit,
@@ -554,69 +554,92 @@ pub async fn get_project_links(url: &str, cancel_rx: Receiver<bool>) -> Option<S
     Some(links.inner_html().to_string())
 }
 
-async fn generate_direct_links(mirror_links: &mut [MirrorLink], recheck_status: bool, direct_links_tx: Sender<(usize, MirrorLink)>, cancel_rx: Receiver<bool>) {
-    let client = Client::new();
-    let mut tasks = Vec::new();
+#[derive(Clone)]
+enum RateLimiter {
+    Semaphore(Arc<Semaphore>),
+    None
+}
 
-    if recheck_status {
-        for (order, link) in mirror_links.iter().enumerate() {
-            let direct_links_tx = direct_links_tx.clone();
-            let mut mirror_link = link.clone();
-            let client = client.clone();
-            let cancel_rx = cancel_rx.clone();
-            tasks.push(tokio::spawn(async move {
-                let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
-                let _ = direct_links_tx.send((order, mirror_link));
-            }));
-        }
-    } else {
-        let semaphore = Arc::new(Semaphore::new(100)); // limit the number of concurrent tasks to 5
-        for (order, link) in mirror_links.iter().enumerate() {
-            let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Acquire semaphore");
-            let direct_links_tx = direct_links_tx.clone();
-            let mut mirror_link = link.clone();
-            let client = client.clone();
-            let cancel_rx = cancel_rx.clone();
-            tasks.push(tokio::spawn(async move {
-                let mirror_link = scrape_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
+async fn create_direct_link_grabber_task(
+    order: usize,
+    link: MirrorLink,
+    recheck_status: bool,
+    direct_links_tx: Sender<(usize, MirrorLink)>,
+    client: &Client,
+    cancel_rx: Receiver<bool>,
+    rate_limiter: RateLimiter,
+) -> JoinHandle<()> {
+    let direct_links_tx = direct_links_tx.clone();
+    let mut mirror_link = link.clone();
+    let client = client.clone();
+    let cancel_rx = cancel_rx.clone();
+    match rate_limiter {
+        RateLimiter::Semaphore(semaphore) => {
+            let permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
+            tokio::spawn(async move {
+                let mirror_link = scrape_mirror_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
                 let _ = direct_links_tx.send((order, mirror_link));
                 drop(permit);
-            }));
+            })
+        }
+        RateLimiter::None => {
+            tokio::spawn(async move {
+                let mirror_link = scrape_mirror_link(&mut mirror_link, recheck_status, &client, cancel_rx).await;
+                let _ = direct_links_tx.send((order, mirror_link));
+            })
         }
     }
+}
 
+async fn grab_direct_links(
+    mirror_links: &mut [MirrorLink],
+    recheck_status: bool,
+    direct_links_tx: Sender<(usize, MirrorLink)>,
+    cancel_rx: Receiver<bool>,
+) {
+    let client = Client::new();
+    let mut tasks = Vec::new();
+    let rate_limiter = if recheck_status {
+        RateLimiter::None
+    } else {
+        // 100 multiup links are processed at the same time
+        RateLimiter::Semaphore(Arc::new(Semaphore::new(100)))
+    };
+    for (order, link) in mirror_links.iter().enumerate() {
+        tasks.push(create_direct_link_grabber_task(
+            order,
+            link.clone(),
+            recheck_status,
+            direct_links_tx.clone(),
+            &client,
+            cancel_rx.clone(),
+            rate_limiter.clone()
+        ).await);
+    }
     let _ = futures::future::join_all(tasks).await;
 }
 
-async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client, cancel_rx: Receiver<bool>) -> MirrorLink {
+async fn scrape_mirror_link(mirror_link: &mut MirrorLink, check_status: bool, client: &Client, cancel_rx: Receiver<bool>) -> MirrorLink {
     let link_hosts = scrape_link_for_hosts(&mirror_link.mirror_url, client, cancel_rx).await;
     if link_hosts.1.contains(&DirectLink {
-        name_host: "!!!error".to_string(),
+        host: "!!!error".to_string(), // Only the name_host is compared
         url: "".to_string(),
         validity: "".to_string(),
         displayed: false,
     }) {
-        let url = mirror_link.mirror_url.clone();
+        let original_link = mirror_link.mirror_url.clone();
         let error = link_hosts.1.first().unwrap().url.clone();
 
-        let url = match url.strip_suffix("/a") {
-            Some(url) => url.to_string(),
-            None => url
-        };
-        mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("!!!error".to_string(), format!("{} - {}", error, url), "invalid".to_string())]));
-        mirror_link.information = Some(LinkInformation {
-            error: "invalid".to_string(),
-            file_name: error,
-            size: 0.to_string(),
-            date_upload: "".to_string(),
-            time_upload: 0,
-            date_last_download: "N/A".to_string(),
-            number_downloads: 0,
-            description: Some(url),
-            hosts: Default::default(),
-        });
+        mirror_link.direct_links = Some(BTreeSet::from([DirectLink::new("!!!error".to_string(), format!("{} - {}", error, original_link), "invalid".to_string())]));
+        mirror_link.file_information = Some(FileInformation::basic_information(
+            "invalid".to_string(),
+            0.to_string(),
+            Some(original_link),
+            Default::default(),
+        ));
         return std::mem::take(mirror_link);
     }
+
     if !check_status {
         //link_hosts.1.sort_by_key(|link| link.name_host.clone());
         mirror_link.direct_links = Some(link_hosts.1);
@@ -628,7 +651,7 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
             _ => {}
         };
         parsed_title.size = parsed_title.size.floor();
-        mirror_link.information = Some(LinkInformation {
+        mirror_link.file_information = Some(FileInformation {
             error: "success".to_string(),
             file_name: parsed_title.file_name,
             size: parsed_title.size.to_string(),
@@ -643,15 +666,15 @@ async fn scrape_link(mirror_link: &mut MirrorLink, check_status: bool, client: &
     }
     let link_information = check_validity(&mirror_link.mirror_url).await;
     let direct_links: BTreeSet<DirectLink> = link_hosts.1.into_iter().map(|link| {
-        let status = match link_information.hosts.get(&link.name_host) {
+        let status = match link_information.hosts.get(&link.host) {
             Some(Some(validity)) => validity.to_string(),
             _ => "unknown".to_string()
         };
-        DirectLink::new(link.name_host, link.url, status)
+        DirectLink::new(link.host, link.url, status)
     }).collect();
     //direct_links.sort_by_key(|link| link.name_host.clone());
     mirror_link.direct_links = Some(direct_links);
-    mirror_link.information = Some(link_information);
+    mirror_link.file_information = Some(link_information);
     std::mem::take(mirror_link)
 }
 
@@ -660,11 +683,9 @@ static FILE_NAME_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 #[async_recursion]
-async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> (ParsedTitle, BTreeSet<DirectLink>) {
-    // Regular links
+async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> (FileMetadata, BTreeSet<DirectLink>) {
     let mut links: BTreeSet<DirectLink> = BTreeSet::new();
     // Scrape panel
-    //let now = Instant::now();
     let html = match get_html(url, client, cancel_rx.clone()).await {
         Ok(html) => html,
         Err(error) => {
@@ -673,56 +694,57 @@ async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<b
                     error.without_url().to_string()
                 }
                 LinkError::Invalid => "Invalid link".to_string(),
-                Cancel => "Cancelled".to_string(),
+                LinkError::Cancel => "Cancelled".to_string(),
             };
-            return (ParsedTitle::default(), BTreeSet::from([DirectLink::new("!!!error".to_string(), error.to_string(), "invalid".to_string())]));
+            return (FileMetadata::default(), BTreeSet::from([DirectLink::new("!!!error".to_string(), error.to_string(), "invalid".to_string())]));
         }
     };
 
-    let selector = SELECTOR.get_or_init(|| Selector::parse(r#"a.host, button.host"#).unwrap()); //button[type="submit"]
+    let host_selector = SELECTOR.get_or_init(|| Selector::parse(r#"a.host, button.host"#).unwrap());
     let file_name_selector = FILE_NAME_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > header > h2 > a"#).unwrap());
     let queue_selector = QUEUE_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > div.row > div > section > div > div > div:nth-child(2) > div > h4"#).unwrap());
 
-    {
-        let website_html = scraper::Html::parse_document(&html);
-        for element in website_html.select(selector) {
-            let element_value = element.value();
-            let name_host = match element_value.attr("namehost") {
-                Some(name_host) => {
-                    if name_host == "UseNext" {
-                        continue;
-                    }
-                    name_host
+    let website_html = scraper::Html::parse_document(&html);
+    for element in website_html.select(host_selector) {
+        let element_value = element.value();
+        let host_name = match element_value.attr("namehost") {
+            Some(name_host) => {
+                // UseNext ad
+                if name_host == "UseNext" {
+                    continue;
                 }
-                None => break,
-            };
-            let link = element_value.attr("link").unwrap();
-            let validity = element_value.attr("validity").unwrap();
-            links.insert(DirectLink::new(name_host.to_string(), link.to_string(), validity.to_string()));
+                name_host
+            }
+            None => break,
         };
+        let link = element_value.attr("link").unwrap();
+        let validity = element_value.attr("validity").unwrap();
+        links.insert(DirectLink::new(host_name.to_string(), link.to_string(), validity.to_string()));
+    };
 
-        if let Some(element) = website_html.select(queue_selector).next() {
-            if links.is_empty() {
-                if let Some(element) = element.next_sibling_element() {
-                    let text = element.inner_html().replace(r#"<strong class="amount">"#, "").replace("</strong>", "").trim().to_string();
-                    let queue_status = if text == "File not found on servers" {
-                        "File not found on servers".to_string()
-                    } else if text.contains("Uploading") {
-                        "Uploading".to_string()
-                    } else if text.parse::<u16>().is_ok() {
-                        format!("In queue ({})", text)
-                    } else {
-                        "Unknown error - the link may be protected by a password or captcha".to_string()
-                    };
-                    links.insert(DirectLink::new("!!!error".to_string(), queue_status.to_string(), "invalid".to_string()));
-                }
+    // Queue selector last since there can be links and a queue message at the same time
+    if let Some(element) = website_html.select(queue_selector).next() {
+        if links.is_empty() {
+            if let Some(element) = element.next_sibling_element() {
+                let text = element.inner_html().replace(r#"<strong class="amount">"#, "").replace("</strong>", "").trim().to_string();
+                let queue_status = if text == "File not found on servers" {
+                    "File not found on servers".to_string()
+                } else if text.contains("Uploading") {
+                    "Uploading".to_string()
+                } else if text.parse::<u16>().is_ok() {
+                    format!("In queue ({})", text)
+                } else {
+                    "Unknown error - The link may be protected by a password or captcha".to_string()
+                };
+                links.insert(DirectLink::new("!!!error".to_string(), queue_status.to_string(), "invalid".to_string()));
             }
         }
     }
 
+
     if links.is_empty() {
         links.insert(DirectLink::new("!!!error".to_string(), "No hosts found".to_string(), "invalid".to_string()));
-        return scrape_link_for_hosts(url, client, cancel_rx).await;
+        // return scrape_link_for_hosts(url, client, cancel_rx).await;
     }
 
     let website_html = scraper::Html::parse_document(&html);
@@ -731,19 +753,20 @@ async fn scrape_link_for_hosts(url: &str, client: &Client, cancel_rx: Receiver<b
     (title_stuff, links)
 }
 
-fn parse_title(input: &str) -> ParsedTitle {
+fn parse_title(input: &str) -> FileMetadata {
     let input = input.trim();
     let parts: Vec<&str> = input.split_whitespace().collect();
+
     if parts.last().unwrap() == &")" {
         let file_name = parts[3..parts.len() - 4].join(" ");
         let size = parts[parts.len() - 3].parse::<f64>().unwrap_or(0.0);
         let unit = parts[parts.len() - 2];
-        ParsedTitle::new(file_name, size, unit.to_string())
+        FileMetadata::new(file_name, size, unit.to_string())
     } else if parts[1] == "Project" || parts[1] == "Projet" {
         let file_name = parts[1..parts.len() - 1].join(" ");
-        ParsedTitle::new(file_name, 0.0, String::new())
+        FileMetadata::new(file_name, 0.0, String::new())
     } else {
-        ParsedTitle::new(String::new(), 0.0, String::new())
+        FileMetadata::new(String::new(), 0.0, String::new())
     }
 }
 
@@ -765,17 +788,20 @@ pub enum LinkError {
 pub async fn get_html(url: &str, client: &Client, cancel_rx: Receiver<bool>) -> Result<String, LinkError> {
     match cancel_rx.try_recv() {
         Ok(_) | Err(TryRecvError::Disconnected) => {
-            return Err(Cancel);
+            return Err(LinkError::Cancel);
         }
         Err(TryRecvError::Empty) => {}
     };
-    let a = match client.get(url).send().await {
+
+    let response = match client.get(url).send().await {
         Ok(response) => response,
         Err(error) => return Err(LinkError::Reqwest(error))
     };
-    match a.error_for_status() {
+
+    match response.error_for_status() {
         Ok(res) => Ok(res.text().await.unwrap().to_string()),
         Err(error) => {
+            // Repeat if error is not 404
             if error.status().unwrap() != StatusCode::NOT_FOUND {
                 let _ = tokio::time::sleep(Duration::from_millis(100)).await;
             }

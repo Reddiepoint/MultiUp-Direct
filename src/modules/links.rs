@@ -6,34 +6,34 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq)]
 pub struct DirectLink {
-    pub name_host: String,
-    pub url: String,
+    pub host: String,
+    pub url: String, // Used for error description as well
     pub validity: String,
     pub displayed: bool,
 }
 
 impl PartialOrd for DirectLink {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.name_host.cmp(&other.name_host))
+        Some(self.host.cmp(&other.host))
     }
 }
 
 impl Ord for DirectLink {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.name_host.cmp(&other.name_host)
+        self.host.cmp(&other.host)
     }
 }
 
 impl PartialEq for DirectLink {
     fn eq(&self, other: &Self) -> bool {
-        self.name_host == other.name_host
+        self.host == other.host
     }
 }
 
 impl DirectLink {
     pub fn new(name_host: String, url: String, validity: String) -> Self {
         DirectLink {
-            name_host,
+            host: name_host,
             url,
             validity,
             displayed: false,
@@ -47,7 +47,7 @@ pub struct MirrorLink {
     pub original_url: String,
     pub mirror_url: String,
     pub direct_links: Option<BTreeSet<DirectLink>>,
-    pub information: Option<LinkInformation>,
+    pub file_information: Option<FileInformation>,
 }
 
 impl PartialEq for MirrorLink {
@@ -62,13 +62,13 @@ impl MirrorLink {
             original_url,
             mirror_url,
             direct_links: None,
-            information: None,
+            file_information: None,
         }
     }
 }
 
 #[derive(Clone, Deserialize)]
-pub struct LinkInformation {
+pub struct FileInformation {
     pub error: String,
     pub file_name: String,
     pub size: String,
@@ -80,21 +80,37 @@ pub struct LinkInformation {
     pub hosts: HashMap<String, Option<String>>,
 }
 
+impl FileInformation {
+    pub fn basic_information(error: String, file_name: String, description: Option<String>, hosts: HashMap<String, Option<String>>) -> Self {
+        FileInformation {
+            error,
+            file_name,
+            size: 0.to_string(),
+            date_upload: "".to_string(),
+            time_upload: 0,
+            date_last_download: "N/A".to_string(),
+            number_downloads: 0,
+            description,
+            hosts,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct Url {
     link: String,
 }
 
 #[async_recursion]
-pub async fn check_validity(url: &str) -> LinkInformation {
+pub async fn check_validity(url: &str) -> FileInformation {
     let client = reqwest::Client::new();
     match client.post("https://multiup.org/api/check-file")
         .json(&Url { link: url.to_string() })
-        .send().await.unwrap().json::<LinkInformation>().await {
+        .send().await.unwrap().json::<FileInformation>().await {
         Ok(information) => information,
         Err(error) => {
             println!("{}", error);
-            LinkInformation {
+            FileInformation {
                 error: "error".to_string(),
                 file_name: "File not available".to_string(),
                 size: "0".to_string(),

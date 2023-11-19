@@ -80,7 +80,7 @@ pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<(bool, Str
         "unknown" => filter.unknown,
         _ => filter.unchecked,
     }).filter(|link| {
-        filter.hosts.iter().any(|(host_name, selected)| *selected && &link.name_host == host_name)
+        filter.hosts.iter().any(|(host_name, selected)| *selected && &link.host == host_name)
     }).map(|link| {
         (link.displayed, link.url.to_string())
     }).collect()
@@ -89,7 +89,7 @@ pub fn filter_links(links: &[DirectLink], filter: &FilterMenu) -> Vec<(bool, Str
 pub fn set_filter_hosts(links: &[DirectLink]) -> Vec<(String, bool)> {
     let mut hosts: BTreeSet<String> = BTreeSet::new();
     for link in links {
-        hosts.insert(link.name_host.to_string());
+        hosts.insert(link.host.to_string());
     }
 
     hosts.into_iter().map(|host| (host, true)).collect()
