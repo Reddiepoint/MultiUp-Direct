@@ -15,8 +15,8 @@ lto = "fat"
 [dependencies]
 async-recursion = { version = "1.0.5" }
 crossbeam-channel = { version = "0.5.8" }
-eframe = { version = "0.23.0" }
-egui_extras = { version = "0.23.0" }
+eframe = { version = "0.24.1" }
+egui_extras = { version = "0.24.1" }
 futures = { version = "0.3.29" }
 reqwest = { version = "0.11.22", features = ["json"] }
 regex = { version = "1.10.2" }
