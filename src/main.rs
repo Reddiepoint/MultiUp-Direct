@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 
-use eframe::egui;
+use eframe::egui::ViewportBuilder;
 
 use crate::modules::main::Application;
 
@@ -10,9 +10,10 @@ mod modules;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        drag_and_drop_support: true,
-        initial_window_size: Some(egui::Vec2::new(1280.0, 800.0)),
-        resizable: true,
+        viewport: ViewportBuilder::default()
+            .with_drag_and_drop(true)
+            .with_resizable(true)
+            .with_inner_size((1280.0, 800.0)),
         centered: true,
         ..Default::default()
     };
