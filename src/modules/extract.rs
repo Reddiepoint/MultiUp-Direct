@@ -4,7 +4,7 @@ use eframe::egui::{Button, ScrollArea, TextEdit, Ui};
 #[derive(Default)]
 pub struct Extract {
     multiup_links: String,
-    recheck_hosts: bool,
+    recheck_validity: bool,
     currently_extracting: bool,
 }
 
@@ -32,7 +32,7 @@ impl Extract {
 
         // Recheck validity and extraction button
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.recheck_hosts, "Recheck link validity");
+            ui.checkbox(&mut self.recheck_validity, "Recheck link validity");
             if ui.add_enabled(!self.currently_extracting, Button::new("Extract links")).clicked() {
                 todo!()
             }
