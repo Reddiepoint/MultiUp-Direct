@@ -1,37 +1,41 @@
 use eframe::{App, Frame};
-use eframe::egui::{Context, menu, TopBottomPanel, Ui};
+use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
 use crate::modules::extract::Extract;
 
 
 #[derive(Default)]
-pub struct Application {
+pub struct MultiUpDirect {
     tab_bar: TabBar,
     extract: Extract,
 }
 
-impl App for Application {
+impl App for MultiUpDirect {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
-        Application::top_bar(self, ctx);
+        MultiUpDirect::display_top_bar(self, ctx);
+        MultiUpDirect::display_central_panel(self, ctx);
     }
 }
 
-impl Application {
-    /// Displays the top bar of the application.
+impl MultiUpDirect {
+    /// Displays the top bar.
     ///
     /// This method is responsible for rendering the top bar of the application, which includes
     /// the tab bar and the menu bar/toolbar elements.
-    fn top_bar(&mut self, ctx: &Context) {
+    fn display_top_bar(&mut self, ctx: &Context) {
         TopBottomPanel::top("Tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 // Add tabs for each function
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
 
                 // Menu bar/toolbar elements
-                Application::menu_bar(ui);
+                MultiUpDirect::menu_bar(ui);
             });
         });
     }
 
+    /// Displays menu bar options in the top bar.
+    ///
+    /// This method is responsible for adding toolbar functionality for different options.
     fn menu_bar(ui: &mut Ui) {
         menu::bar(ui, |ui| {
             ui.menu_button("Help", |ui| {
@@ -40,8 +44,16 @@ impl Application {
         });
     }
 
-    fn show_central_panel(&mut self, ctx: &Context) {
 
+    /// Displays the central panel in the user interface based on the selected tab.
+    ///
+    /// The central panel must be added last.
+    fn display_central_panel(&mut self, ctx: &Context) {
+        CentralPanel::default().show(ctx, |ui| {
+           match &self.tab_bar {
+               TabBar::Extract => Extract::display(ui, &mut self.extract)
+           }
+        });
     }
 }
 

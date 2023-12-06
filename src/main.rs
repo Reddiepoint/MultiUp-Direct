@@ -2,7 +2,7 @@
 
 use eframe::egui::ViewportBuilder;
 
-use crate::modules::main::Application;
+use crate::modules::main::MultiUpDirect;
 
 //mod constants;
 //mod functions;
@@ -21,6 +21,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "MultiUp Direct",
         options,
-        Box::new(|_cc| Box::<Application>::default()),
+        Box::new(|_cc| Box::<MultiUpDirect>::default()),
     )
 }
