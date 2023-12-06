@@ -1,12 +1,15 @@
 use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
-use crate::modules::extract::Extract;
+use crate::modules::extract::ExtractUI;
 
 
+/// A struct representing the application UI.
+/// 
+/// Stores the state of each tab.
 #[derive(Default)]
 pub struct MultiUpDirect {
     tab_bar: TabBar,
-    extract: Extract,
+    extract: ExtractUI,
 }
 
 impl App for MultiUpDirect {
@@ -51,13 +54,15 @@ impl MultiUpDirect {
     fn display_central_panel(&mut self, ctx: &Context) {
         CentralPanel::default().show(ctx, |ui| {
            match &self.tab_bar {
-               TabBar::Extract => Extract::display(ui, &mut self.extract)
+               TabBar::Extract => ExtractUI::display(ui, &mut self.extract)
            }
         });
     }
 }
 
 
+
+/// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
 enum TabBar {
     #[default]

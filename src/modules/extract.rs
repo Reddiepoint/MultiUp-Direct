@@ -2,33 +2,32 @@ use eframe::egui::{Button, ScrollArea, TextEdit, Ui};
 
 
 #[derive(Default)]
-pub struct Extract {
+pub struct ExtractUI {
     multiup_links: String,
     recheck_validity: bool,
     currently_extracting: bool,
 }
 
 
-impl Extract {
-    pub fn display(ui: &mut Ui, extract: &mut Extract) {
-        extract.display_input_area(ui);
+impl ExtractUI {
+    pub fn display(ui: &mut Ui, extract_ui: &mut ExtractUI) {
+        extract_ui.display_input_area(ui);
+        extract_ui.display_output_area(ui);
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
-
         ui.heading("MultiUp Links");
 
-        ui.vertical(|ui| {
-            let input_area_height = ui.available_height() / 4.0;
-            ui.set_max_height(input_area_height);
-            ScrollArea::both()
-                .id_source("MultiUp Link Input Area")
-                .show(ui, |ui| {
-                    ui.add(TextEdit::multiline(&mut self.multiup_links)
-                        .hint_text("Paste your MultiUp links here")
-                        .desired_width(ui.available_width()));
-                });
-        });
+        let input_area_height = ui.available_height() / 4.0;
+        ui.set_max_height(input_area_height);
+        ScrollArea::both()
+            .id_source("MultiUp Link Input Area")
+            .max_height(input_area_height)
+            .show(ui, |ui| {
+                ui.add(TextEdit::multiline(&mut self.multiup_links)
+                    .hint_text("Paste your MultiUp links here")
+                    .desired_width(ui.available_width()));
+            });
 
         // Recheck validity and extraction button
         ui.horizontal(|ui| {
@@ -39,7 +38,7 @@ impl Extract {
         });
     }
 
-    fn link_generation(&mut self, ui: &mut Ui) {
+    fn display_link_information() {
 
     }
 
@@ -47,8 +46,7 @@ impl Extract {
 
     }
 
-    fn filter_menu_area(&mut self, ui: &mut Ui) {
+    fn display_filter_menu_area(&mut self, ui: &mut Ui) {
 
     }
-
 }
