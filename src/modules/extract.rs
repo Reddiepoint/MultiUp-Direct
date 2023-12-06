@@ -34,6 +34,7 @@ impl ExtractUI {
         // Recheck validity and extraction button
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.recheck_validity, "Recheck link validity");
+
             if ui.add_enabled(!self.currently_extracting, Button::new("Extract links")).clicked() {
                 extract_links();
             }
@@ -57,6 +58,7 @@ impl ExtractUI {
 
     fn display_output_area(&mut self, ui: &mut Ui) {
         ui.heading("Direct Links");
+
         ui.horizontal(|ui| {
             let output_box_width = 0.75 * ui.available_width();
             TableBuilder::new(ui)
@@ -64,8 +66,9 @@ impl ExtractUI {
                 .body(|body| {
 
                 });
+
+            self.display_filter_menu_area(ui);
         });
-        self.display_filter_menu_area(ui);
     }
 
     fn display_filter_menu_area(&mut self, ui: &mut Ui) {
