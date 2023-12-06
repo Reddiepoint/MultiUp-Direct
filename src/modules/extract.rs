@@ -22,8 +22,8 @@ impl Extract {
                 .id_source("MultiUp Link Input Area")
                 .show(ui, |ui| {
                     ui.add(TextEdit::multiline(&mut self.multiup_links)
-                        .hint_text("Paste your links here"));
-
+                        .hint_text("Paste your MultiUp links here")
+                        .desired_width(ui.available_width()));
                 });
         });
     }
