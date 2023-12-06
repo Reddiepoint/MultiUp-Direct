@@ -1,4 +1,5 @@
 use eframe::egui::{Button, ScrollArea, TextEdit, Ui};
+use egui_extras::{Column, TableBuilder};
 
 
 #[derive(Default)]
@@ -12,6 +13,7 @@ pub struct ExtractUI {
 impl ExtractUI {
     pub fn display(ui: &mut Ui, extract_ui: &mut ExtractUI) {
         extract_ui.display_input_area(ui);
+        extract_ui.display_link_information(ui);
         extract_ui.display_output_area(ui);
     }
 
@@ -33,20 +35,29 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.recheck_validity, "Recheck link validity");
             if ui.add_enabled(!self.currently_extracting, Button::new("Extract links")).clicked() {
-                todo!()
+                extract_links();
             }
         });
     }
 
-    fn display_link_information() {
-
+    fn display_link_information(&mut self, ui: &mut Ui) {
+        ui.collapsing("Link Information", |ui| {
+            // let width = ui.available_width();
+            // TableBuilder::new(ui)
+            //     .column(Column::auto())
+        });
     }
 
-    fn output_area(&mut self, ui: &mut Ui) {
-
+    fn display_output_area(&mut self, ui: &mut Ui) {
+        ui.heading("Direct Links");
+        self.display_filter_menu_area(ui);
     }
 
     fn display_filter_menu_area(&mut self, ui: &mut Ui) {
 
     }
+}
+
+fn extract_links() {
+
 }
