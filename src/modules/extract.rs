@@ -1,4 +1,4 @@
-use eframe::egui::{Button, ScrollArea, TextEdit, Ui};
+use eframe::egui::{Align, Button, Layout, ScrollArea, TextEdit, Ui};
 use egui_extras::{Column, TableBuilder};
 
 
@@ -42,14 +42,29 @@ impl ExtractUI {
 
     fn display_link_information(&mut self, ui: &mut Ui) {
         ui.collapsing("Link Information", |ui| {
-            // let width = ui.available_width();
-            // TableBuilder::new(ui)
-            //     .column(Column::auto())
+            let width = ui.available_width();
+            TableBuilder::new(ui)
+                // Column for selecting which MultiUp links to show
+                .column(Column::auto())
+                // Column for MultiUp link information
+                .column(Column::remainder())
+                .cell_layout(Layout::left_to_right(Align::Center))
+                .body(|body| {
+
+                });
         });
     }
 
     fn display_output_area(&mut self, ui: &mut Ui) {
         ui.heading("Direct Links");
+        ui.horizontal(|ui| {
+            let output_box_width = 0.75 * ui.available_width();
+            TableBuilder::new(ui)
+                .column(Column::exact(output_box_width))
+                .body(|body| {
+
+                });
+        });
         self.display_filter_menu_area(ui);
     }
 
