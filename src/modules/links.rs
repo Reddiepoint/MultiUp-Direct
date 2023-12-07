@@ -5,11 +5,13 @@ use serde::Deserialize;
 
 
 /// Represents a MultiUp link.
-/// Contains the original input link, the fixed mirror link and any direct links.
+/// Contains the original input link, the fixed mirror link, the extracted direct links
+/// and a status reflecting whether the link was successful or not.
 pub struct MultiUpLink {
     pub original_link: String,
     pub mirror_link: String,
-    pub direct_links: Option<BTreeSet<DirectLink>>
+    pub direct_links: Option<BTreeSet<DirectLink>>,
+    pub status: Option<Result<(), String>>
 }
 
 
