@@ -280,13 +280,11 @@ async fn get_project_information(project_link: &str) -> (String, String, Result<
                 let _ = tokio::time::sleep(Duration::from_millis(100)).await;
                 return get_project_information(project_link).await;
             }
-            return (id, name, Err(LinkError::Reqwest(error)));
+            return (id, name, Err(LinkError::Invalid));
         }
     };
 
     let parsed_page = scraper::Html::parse_document(&html);
-
-
 
     let project_title_selector = PROJECT_TITLE_SELECTOR
         .get_or_init(|| Selector::parse(r#".text-truncate"#).unwrap());
