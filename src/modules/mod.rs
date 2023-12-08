@@ -7,3 +7,4 @@ pub mod filter;
 pub mod help;
 pub mod links;
 pub mod main;
+mod general;

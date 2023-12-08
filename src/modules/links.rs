@@ -1,28 +1,109 @@
-use std::collections::{BTreeSet, HashMap};
 use serde::Deserialize;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
+#[derive(Debug)]
+pub enum MultiUpLink {
+    Project(ProjectLink),
+    Download(DownloadLink),
+}
 
-
-
-/// Represents a MultiUp link.
-/// Contains the original input link, the fixed mirror link, the extracted direct links
-/// and a status reflecting whether the link was successful or not.
-pub struct MultiUpLink {
-    pub original_link: String,
-    pub mirror_link: String,
-    pub direct_links: Option<BTreeSet<DirectLink>>,
-    pub status: Option<Result<(), String>>
+impl PartialEq for MultiUpLink {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Project(project_link_l), Self::Project(project_link_r)) => {
+                project_link_l == project_link_r
+            }
+            (Self::Download(download_link_l), Self::Download(download_link_r)) => {
+                download_link_l == download_link_r
+            }
+            _ => false,
+        }
+    }
 }
 
 
+/// Represents a MultiUp project link.
+/// Contains the original input link, the ID of the link,
+/// the name of the project, the extracted download links,
+/// and a status reflecting whether the link was successful or not.
+#[derive(Debug)]
+pub struct ProjectLink {
+    pub original_link: String,
+    pub link_id: String,
+    pub name: String,
+    pub download_links: Option<HashSet<DownloadLink>>,
+    pub status: Option<Result<(), LinkError>>,
+}
+
+// Compares link_id
+impl PartialEq for ProjectLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.link_id == other.link_id
+    }
+}
+
+impl ProjectLink {
+    pub fn new(original_link: String, link_id: String, name: String) -> Self {
+        Self {
+            original_link,
+            link_id,
+            name,
+            download_links: None,
+            status: None,
+        }
+    }
+}
+
+
+/// Represents a MultiUp download link.
+/// Contains the original input link, the ID of the link, the extracted direct links
+/// and a status reflecting whether the link was successful or not.
+#[derive(Debug)]
+pub struct DownloadLink {
+    pub original_link: String,
+    pub link_id: String,
+    pub direct_links: Option<BTreeSet<DirectLink>>,
+    pub link_information: Option<MultiUpLinkInformation>,
+    pub status: Option<Result<(), LinkError>>,
+}
+
+impl Hash for DownloadLink {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.link_id.hash(state);
+    }
+}
+
+impl PartialEq for DownloadLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.link_id == other.link_id
+    }
+}
+
+impl Eq for DownloadLink {}
+
+impl DownloadLink {
+    pub fn new(original_link: String, link_id: String) -> Self {
+        Self {
+            original_link,
+            link_id,
+            direct_links: None,
+            link_information: None,
+            status: None,
+        }
+    }
+}
+
 /// Represents a direct link within a MultiUp link.
 /// Contains the host, URL, validity and whether the link should be displayed in the output.
+#[derive(Debug)]
 pub struct DirectLink {
     pub host: String,
     pub url: String,
     pub validity: String,
-    pub displayed: String
+    pub displayed: String,
 }
+
 
 /// Represents information about a MultiUp link from the MultiUp API.
 /// Contains details such as the request status, file name, size, upload and download dates,
@@ -30,7 +111,7 @@ pub struct DirectLink {
 ///
 /// When the API returns an error, only the error field will be returned. Otherwise, it will return
 /// `"success"`.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct MultiUpLinkInformation {
     pub error: String,
     pub file_name: Option<String>,
@@ -43,3 +124,10 @@ pub struct MultiUpLinkInformation {
     pub hosts: Option<HashMap<String, String>>,
 }
 
+#[derive(Debug)]
+pub enum LinkError {
+    Cancelled,
+    Invalid,
+    NoLinks,
+    Reqwest(reqwest::Error),
+}
