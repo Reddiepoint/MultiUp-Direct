@@ -1,15 +1,18 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use async_recursion::async_recursion;
 use eframe::egui::{Align, Button, Layout, ScrollArea, TextEdit, Ui};
 use egui_extras::{Column, TableBuilder};
 use regex::Regex;
 use reqwest::{Client, StatusCode};
-use scraper::Selector;
-use std::sync::OnceLock;
+use scraper::{ElementRef, Selector};
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
+use scraper::node::Element;
+use tokio::io::split;
 use tokio::runtime::Runtime;
-use crate::modules::links::{DownloadLink, LinkError, MultiUpLink, ProjectLink};
+use tokio::sync::Semaphore;
+use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, MultiUpLinkInformation, ProjectLink};
 
 #[derive(Default)]
 pub struct ExtractUI {
@@ -55,9 +58,10 @@ impl ExtractUI {
                 // Main extraction function
                 let rt = Runtime::new().unwrap();
                 let multiup_links = self.multiup_links.clone();
+                let recheck_validity = self.recheck_validity;
                 thread::spawn(move || {
                     rt.block_on(async {
-                        extract_direct_links(&multiup_links).await;
+                        extract_direct_links(&multiup_links, recheck_validity).await;
                     });
                 });
             }
@@ -101,18 +105,20 @@ impl ExtractUI {
 }
 
 // Extraction Functions
-async fn extract_direct_links(input_text: &str) {
+async fn extract_direct_links(input_text: &str, recheck_validity: bool) {
     // Detect links
     let detected_links = detect_links(input_text);
 
     // Process links
-    let time_now = Instant::now();
+
     let processed_links = process_links(detected_links).await;
-    let time_taken = time_now.elapsed();
-    println!("{}", time_taken.as_secs_f32());
+
 
     // Return vec of mirror links
-    get_direct_links(processed_links).await;
+    let time_now = Instant::now();
+    get_direct_links(processed_links, recheck_validity).await;
+    let time_taken = time_now.elapsed();
+    println!("{}", time_taken.as_secs_f32());
 }
 
 /// Detects MultiUp links in the given input text.
@@ -275,7 +281,7 @@ async fn get_project_information(project_link: &str) -> (String, String, Result<
     let html = match server_response.error_for_status() {
         Ok(res) => res.text().await.unwrap().to_string(),
         Err(error) => {
-            // Repeat if error is not 404, otherwise, return nothing
+            // Repeat if error is not 404, otherwise, return invalid
             if error.status().unwrap() != StatusCode::NOT_FOUND {
                 let _ = tokio::time::sleep(Duration::from_millis(100)).await;
                 return get_project_information(project_link).await;
@@ -333,22 +339,150 @@ fn process_non_project_link(link: &str, regex: &Regex) -> DownloadLink {
     DownloadLink::new(link.to_string(), id)
 }
 
-const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
-async fn get_direct_links(mut multiup_links: Vec<MultiUpLink>) {
+
+async fn get_direct_links(mut multiup_links: Vec<MultiUpLink>, recheck_validity: bool) {
+    // At the beginning of the function
+    let semaphore = Arc::new(Semaphore::new(5));
+    let mut tasks = Vec::new();
+    println!("{:?}", multiup_links);
     for link in multiup_links {
         match link {
-            MultiUpLink::Project(mut project_link) => {}
+            MultiUpLink::Project(mut project_link) => {
+                // Create a task for each project link
+                let semaphore = Arc::clone(&semaphore);
+                let task = tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    get_direct_links_from_project(project_link, recheck_validity).await
+                });
+                tasks.push(task);
+            }
             MultiUpLink::Download(mut download_link) => {
-                get_direct_links_from_download_link(download_link).await;
+                // Create a task for each download link
+                let semaphore = Arc::clone(&semaphore);
+                let task = tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    get_direct_links_from_download_link(download_link, recheck_validity).await
+                });
+                tasks.push(task);
             }
         }
     }
+
+// Wait for all tasks to complete
+    let results = futures::future::join_all(tasks).await;
+
+// Sort the results based on their order of processing
+//     results.sort_by_key(|(order, _)| *order);
+
+// Extract the direct links from the results
+//     let direct_links: Vec<(usize, MirrorLink)> = results.into_iter().map(|(_, result)| result).collect();
 }
 
-async fn get_direct_links_from_project(mut project_link: ProjectLink) {
+async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_validity: bool) {
 
 }
 
-async fn get_direct_links_from_download_link(mut download_link: DownloadLink) {
+const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
+async fn get_direct_links_from_download_link(mut download_link: DownloadLink, recheck_validity: bool) {
+    let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
+    println!("{mirror_link}");
+    if recheck_validity {
+        recheck_validity_api(mirror_link, download_link).await;
+    } else {
+        process_mirror_link(mirror_link, download_link).await;
+    }
+}
 
+async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLink) {
+
+}
+
+async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLink) {
+    let _ = get_mirror_information(&mirror_link).await;
+
+
+}
+
+static MIRROR_HOSTS_SELECTOR: OnceLock<Selector> = OnceLock::new();
+static MIRROR_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
+static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
+#[async_recursion]
+async fn get_mirror_information(mirror_link: &str) -> Result<(BTreeSet<DirectLink>), LinkError> {
+    let mut direct_links: BTreeSet<DirectLink> = BTreeSet::new();
+
+    let client = Client::new();
+    let server_response = match client.get(mirror_link).send().await {
+        Ok(response) => response,
+        Err(error) => return Err(LinkError::Reqwest(error)),
+    };
+
+    let html = match server_response.error_for_status() {
+        Ok(res) => res.text().await.unwrap().to_string(),
+        Err(error) => {
+            // Repeat if error is not 404, otherwise, return invalid
+            if error.status().unwrap() != StatusCode::NOT_FOUND {
+                let _ = tokio::time::sleep(Duration::from_millis(100)).await;
+                return get_mirror_information(mirror_link).await;
+            }
+            return Err(LinkError::Invalid);
+        }
+    };
+
+    let parsed_page = scraper::Html::parse_document(&html);
+
+    let mirror_hosts_selector = MIRROR_HOSTS_SELECTOR.get_or_init(|| Selector::parse(r#"a.host[namehost], button.host[namehost]"#).unwrap());
+    for button in parsed_page.select(mirror_hosts_selector) {
+        let direct_link = get_direct_link_from_button(button);
+        direct_links.insert(direct_link);
+    }
+    if direct_links.is_empty() {
+        return Err(LinkError::NoLinks);
+    }
+
+    let file_name_selector = MIRROR_TITLE_SELECTOR.get_or_init(|| Selector::parse(r#"h2.text-truncate"#).unwrap());
+    let title = get_title_and_size_from_title_text(parsed_page.select(file_name_selector).next().unwrap());
+    let link_information = MultiUpLinkInformation::new_basic(title.0, title.1);
+
+    let queue_selector = QUEUE_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > div.row > div > section > div > div > div:nth-child(2) > div > h4"#).unwrap());
+    if let Some(queue_message) = parsed_page.select(queue_selector).next() {
+        return Err(LinkError::InQueue);
+    }
+
+    Ok(direct_links)
+}
+
+fn get_direct_link_from_button(button: ElementRef) -> DirectLink {
+    let button_value = button.value();
+    let host_name = button_value.attr("namehost").unwrap();
+    let link = button_value.attr("link").unwrap();
+    let validity = button_value.attr("validity").unwrap();
+
+    DirectLink::new(host_name.to_string(), link.to_string(), validity.to_string())
+}
+
+fn get_title_and_size_from_title_text(title: ElementRef) -> (String, u64) {
+    let mirror_title = title.text().last().unwrap().to_string();
+    // Extract the file name
+    let file_name = mirror_title.trim_start_matches(" / Mirror list ").split(" (").next().unwrap();
+    println!("{}", file_name);
+    // Extract the size value and unit
+    let size_match = mirror_title
+        .trim_end_matches(" )").rsplit(" (")
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .collect::<Vec<&str>>();
+    let size_value = size_match[0].parse::<f64>().ok().unwrap();
+    let size_unit = size_match[1].to_lowercase();
+
+
+    // Convert size into bytes
+    let size_in_bytes = match size_unit.as_str() {
+        "kb" => (size_value * 1024.0) as u64,
+        "mb" => (size_value * 1024.0 * 1024.0) as u64,
+        "gb" => (size_value * 1024.0 * 1024.0 * 1024.0) as u64,
+        _ => 0,
+    };
+
+    (file_name.to_string(), size_in_bytes)
 }

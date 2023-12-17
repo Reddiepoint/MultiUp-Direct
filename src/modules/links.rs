@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -101,12 +102,42 @@ pub struct DirectLink {
     pub host: String,
     pub url: String,
     pub validity: String,
-    pub displayed: String,
+    pub displayed: bool,
 }
 
+impl PartialEq for DirectLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.host == other.host
+    }
+}
+
+impl Eq for DirectLink {}
+
+impl PartialOrd for DirectLink {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.host.cmp(&other.host))
+    }
+}
+
+impl Ord for DirectLink {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.host.cmp(&other.host)
+    }
+}
+
+impl DirectLink {
+    pub fn new(host: String, url: String, validity: String) -> Self {
+        Self {
+            host,
+            url,
+            validity,
+            displayed: true,
+        }
+    }
+}
 
 /// Represents information about a MultiUp link from the MultiUp API.
-/// Contains details such as the request status, file name, size, upload and download dates,
+/// Contains details such as the request status, file name, size (in bytes), upload and download dates,
 /// number of downloads, description, and hosts.
 ///
 /// When the API returns an error, only the error field will be returned. Otherwise, it will return
@@ -124,10 +155,27 @@ pub struct MultiUpLinkInformation {
     pub hosts: Option<HashMap<String, String>>,
 }
 
+impl MultiUpLinkInformation {
+    pub fn new_basic(file_name: String, size: u64) -> Self {
+        Self {
+            error: "success".to_string(),
+            file_name: Some(file_name),
+            size: Some(size),
+            date_upload: None,
+            time_upload: None,
+            date_last_download: None,
+            number_downloads: None,
+            description: None,
+            hosts: None,
+        }
+    }
+}
 #[derive(Debug)]
 pub enum LinkError {
     Cancelled,
     Invalid,
+    InQueue,
     NoLinks,
-    Reqwest(reqwest::Error),
+    Other,
+    Reqwest(reqwest::Error)
 }
