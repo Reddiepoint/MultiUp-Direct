@@ -177,5 +177,6 @@ pub enum LinkError {
     InQueue,
     NoLinks,
     Other,
-    Reqwest(reqwest::Error)
+    Reqwest(reqwest::Error),
+    TimedOut
 }
