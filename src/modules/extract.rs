@@ -104,6 +104,43 @@ impl ExtractUI {
                     self.currently_extracting = false;
                 }
             }
+
+            if !self.completed_links.is_empty() {
+                let mut total_links: u32 = 0;
+                let mut successful_links: u32 = 0;
+                for link in self.completed_links.iter() {
+                    match link {
+                        MultiUpLink::Project(project) => {
+                            match &project.status {
+                                Some(Ok(_)) => {
+                                    for link in project.download_links.as_ref().unwrap() {
+                                        if link.status.as_ref().is_some_and(|status| status.is_ok()) {
+                                            total_links += 1;
+                                            successful_links += 1;
+                                        }
+                                    }
+                                },
+                                _ => {
+                                    total_links += 1;
+                                }
+                            }
+                        }
+                        MultiUpLink::Download(download) => {
+                            match &download.status {
+                                Some(Ok(_)) => {
+                                    total_links += 1;
+                                    successful_links += 1
+                                }
+                                _ => {
+                                    total_links += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ui.label(format!("{}/{} extracted successfully", successful_links, total_links));
+            }
         });
     }
 
@@ -111,8 +148,6 @@ impl ExtractUI {
         ui.collapsing("Link Information", |ui| {
             let width = ui.available_width();
             TableBuilder::new(ui)
-                // Column for selecting which MultiUp links to show
-                .column(Column::auto())
                 // Column for MultiUp link information
                 .column(Column::remainder())
                 .cell_layout(Layout::left_to_right(Align::Center))
@@ -135,21 +170,23 @@ impl ExtractUI {
                                                 links.push(link);
                                             }
                                             for link in links {
-                                                let information = link.link_information.as_ref().unwrap();
-                                                let mut display_information = String::new();
-                                                if let Some(file_name) = &information.file_name {
-                                                    display_information += file_name;
+                                                if let Some(information) = &link.link_information {
+                                                    let mut display_information = String::new();
+                                                    if let Some(file_name) = &information.file_name {
+                                                        display_information += file_name;
+                                                    }
+                                                    if let Some(description) = &information.description {
+                                                        display_information += format!(" - {}", description).as_str();
+                                                    }
+                                                    if let Some(file_size) = &information.size {
+                                                        display_information += format!(" ({} bytes)", file_size).as_str();
+                                                    }
+                                                    if let Some(date_upload) = &information.date_upload {
+                                                        display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                                    }
+                                                    ui.label(display_information);
                                                 }
-                                                if let Some(description) = &information.description {
-                                                    display_information += format!(" - {}", description).as_str();
-                                                }
-                                                if let Some(file_size) = &information.size {
-                                                    display_information += format!(" ({} bytes)", file_size).as_str();
-                                                }
-                                                if let Some(date_upload) = &information.date_upload {
-                                                    display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                                }
-                                                ui.label(display_information);
+
                                             }
                                         });
                                     });
@@ -415,19 +452,16 @@ async fn get_project_information(project_link: &str, try_count: u8) -> (String, 
 
 /// Extracts the project name from a given title text.
 fn get_project_name_from_title(title_text: &str) -> Option<&str> {
-    let prefix = " / Project ";
-    match title_text.find(prefix) {
-        Some(index) => {
+    let prefixes = [" / Projet ", " / Project "];
+    for prefix in prefixes.iter() {
+        if let Some(index) = title_text.find(prefix) {
             let name_start = index + prefix.len();
             let name_end = title_text.find(" (").unwrap_or(title_text.len());
             let name = &title_text[name_start..name_end];
-
-            Some(name)
-        }
-        None => {
-            None
+            return Some(name);
         }
     }
+    None
 }
 
 /// Process a non-project link and return a `DownloadLink` object.
