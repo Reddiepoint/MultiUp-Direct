@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 use async_recursion::async_recursion;
-use eframe::egui::{Align, Button, Layout, ScrollArea, TextEdit, Ui};
+use eframe::egui::{Align, Button, Context, Layout, ScrollArea, TextEdit, Ui, Window};
 use egui_extras::{Column, TableBuilder};
 use regex::Regex;
 use reqwest::{Client, StatusCode};
@@ -37,6 +37,8 @@ pub struct ExtractUI {
     // cancelled_extraction: bool,
     completed_links: Vec<MultiUpLink>,
     channels: Channels,
+    pub error_log_open: bool,
+    error_log_text: String
 }
 
 impl ExtractUI {
@@ -117,6 +119,8 @@ impl ExtractUI {
                                         if link.status.as_ref().is_some_and(|status| status.is_ok()) {
                                             total_links += 1;
                                             successful_links += 1;
+                                        } else {
+                                            total_links += 1;
                                         }
                                     }
                                 },
@@ -141,7 +145,67 @@ impl ExtractUI {
 
                 ui.label(format!("{}/{} extracted successfully", successful_links, total_links));
             }
+
+            if ui.button("See errors").clicked() {
+                let mut errors = String::new();
+                for link in self.completed_links.iter() {
+                    match link {
+                        MultiUpLink::Project(project) => {
+                            match &project.status {
+                                Some(status) => {
+                                    match status {
+                                        Ok(_) => {
+                                            for link in project.download_links.as_ref().unwrap() {
+                                                if link.status.as_ref().is_none() {
+                                                    errors = format!("{}\n{} - {}", errors, &link.original_link, "Unknown");
+                                                } else if let Err(error) = link.status.as_ref().unwrap() {
+                                                    errors = format!("{}\n{} - {:?}", errors, &link.original_link, error);
+                                                }
+                                            }
+                                        }
+                                        Err(error) => {
+                                            errors = format!("{}\n{} - {:?}", errors, &project.original_link, error);
+                                        }
+                                    }
+                                }
+                                None => {
+                                    errors = format!("{}\n{} - {}", errors, &project.original_link, "Unknown");
+                                }
+                            }
+                        }
+                        MultiUpLink::Download(download) => {
+                            match &download.status {
+                                Some(status) => {
+                                    match status {
+                                        Ok(_) => {},
+                                        Err(error) => {
+                                            errors = format!("{}\n{} - {:?}", errors, &download.original_link, error);
+                                        }
+                                    }
+
+                                },
+                                None => {
+                                    errors = format!("{}\n{} - {}", errors, &download.original_link, "Unknown");
+                                }
+                            }
+                        }
+                    }
+                }
+                self.error_log_text = errors;
+                self.error_log_open = true;
+            }
         });
+    }
+
+    pub fn display_error_log(&mut self, ctx: &Context) {
+        Window::new("Error Log")
+            .open(&mut self.error_log_open)
+            .show(ctx, |ui| {
+                ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Error Log").show(ui, |ui| {
+                    let mut error = self.error_log_text.clone();
+                    ui.add(TextEdit::multiline(&mut error));
+                });
+            });
     }
 
     fn display_link_information(&mut self, ui: &mut Ui) {
