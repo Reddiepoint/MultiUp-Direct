@@ -242,86 +242,83 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.set_height(height);
             let output_box_width = 0.80 * ui.available_width();
-            ui.vertical(|ui| {
-                for link in &self.completed_links {
-                    match link {
-                        MultiUpLink::Project(project) => {
-                            if let Some(Ok(())) = project.status {
-                                ui.collapsing(&project.name, |ui| {
-                                    // TableBuilder::new(ui).column(Column::auto()).body(|body| {
-                                    //     body.rows(20.0, project.download_links.as_ref().unwrap().len(), |row_index, mut row| {
-                                    //
-                                    //     });
-                                    // });
-
-
-                                    for link in project.download_links.as_ref().unwrap() {
-                                        if let Some(information) = &link.link_information {
-                                            let mut display_information = String::new();
-                                            if let Some(file_name) = &information.file_name {
-                                                display_information += file_name;
-                                            }
-                                            if let Some(description) = &information.description {
-                                                display_information += format!(" - {}", description).as_str();
-                                            }
-                                            if let Some(file_size) = &information.size {
-                                                display_information += format!(" ({} bytes)", file_size).as_str();
-                                            }
-                                            if let Some(date_upload) = &information.date_upload {
-                                                display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                            }
-                                            CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
-                                                let filtered_links = self.filter.filter_links(link);
-                                                TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                                    body.rows(20.0, filtered_links.len(), |mut row| {
-                                                        let row_index = row.index();
-                                                        row.col(|ui| {
-                                                            ui.label(&filtered_links[row_index]);
+            ScrollArea::vertical().id_source("Direct links output").show(ui, |ui| {
+                ui.vertical(|ui| {
+                    for link in &self.completed_links {
+                        match link {
+                            MultiUpLink::Project(project) => {
+                                if let Some(Ok(())) = project.status {
+                                    CollapsingHeader::new(&project.name)
+                                        .id_source(&project.link_id)
+                                        .default_open(true)
+                                        .show(ui, |ui| {
+                                            for link in project.download_links.as_ref().unwrap() {
+                                                if let Some(information) = &link.link_information {
+                                                    let mut display_information = String::new();
+                                                    if let Some(file_name) = &information.file_name {
+                                                        display_information += file_name;
+                                                    }
+                                                    if let Some(description) = &information.description {
+                                                        display_information += format!(" - {}", description).as_str();
+                                                    }
+                                                    if let Some(file_size) = &information.size {
+                                                        display_information += format!(" ({} bytes)", file_size).as_str();
+                                                    }
+                                                    if let Some(date_upload) = &information.date_upload {
+                                                        display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                                    }
+                                                    CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
+                                                        let filtered_links = self.filter.filter_links(link);
+                                                        TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                            body.rows(20.0, filtered_links.len(), |mut row| {
+                                                                let row_index = row.index();
+                                                                row.col(|ui| {
+                                                                    ui.label(&filtered_links[row_index]);
+                                                                });
+                                                            });
                                                         });
                                                     });
+                                                }
+                                            }
+                                        });
+                                }
+                            },
+                            MultiUpLink::Download(download) => {
+                                if let Some(Ok(())) = download.status {
+                                    let information = download.link_information.as_ref().unwrap();
+                                    let mut display_information = String::new();
+                                    if let Some(file_name) = &information.file_name {
+                                        display_information += file_name;
+                                    }
+                                    if let Some(description) = &information.description {
+                                        display_information += format!(" - {}", description).as_str();
+                                    }
+                                    if let Some(file_size) = &information.size {
+                                        display_information += format!(" ({} bytes)", file_size).as_str();
+                                    }
+                                    if let Some(date_upload) = &information.date_upload {
+                                        display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                    }
+
+                                    // ui.label(display_information);
+                                    CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
+                                        let filtered_links = self.filter.filter_links(download);
+                                        TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                            body.rows(20.0, filtered_links.len(), |mut row| {
+                                                let row_index = row.index();
+                                                row.col(|ui| {
+                                                    ui.label(&filtered_links[row_index]);
                                                 });
                                             });
-                                        }
-                                    }
-                                });
-                            }
-                        },
-                        MultiUpLink::Download(download) => {
-                            if let Some(Ok(())) = download.status {
-                                let information = download.link_information.as_ref().unwrap();
-                                let mut display_information = String::new();
-                                if let Some(file_name) = &information.file_name {
-                                    display_information += file_name;
-                                }
-                                if let Some(description) = &information.description {
-                                    display_information += format!(" - {}", description).as_str();
-                                }
-                                if let Some(file_size) = &information.size {
-                                    display_information += format!(" ({} bytes)", file_size).as_str();
-                                }
-                                if let Some(date_upload) = &information.date_upload {
-                                    display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                }
-
-                                // ui.label(display_information);
-                                CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
-                                    let filtered_links = self.filter.filter_links(download);
-                                    TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                        body.rows(20.0, filtered_links.len(), |mut row| {
-                                            let row_index = row.index();
-                                            row.col(|ui| {
-                                                ui.label(&filtered_links[row_index]);
-                                            });
                                         });
+
                                     });
-
-                                });
+                                }
                             }
-                        }
-                    };
-                }
+                        };
+                    }
+                });
             });
-
 
             self.filter.show(ui, &self.completed_links);
         });
