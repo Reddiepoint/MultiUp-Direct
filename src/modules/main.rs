@@ -54,7 +54,7 @@ impl MultiUpDirect {
     fn display_central_panel(&mut self, ctx: &Context) {
         CentralPanel::default().show(ctx, |ui| {
             match &self.tab_bar {
-               TabBar::Extract => ExtractUI::display(ui, &mut self.extract)
+               TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract)
             }
 
             if self.extract.error_log_open {

@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 use async_recursion::async_recursion;
-use eframe::egui::{Align, Button, Context, Layout, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui::{Align, Align2, Button, CollapsingHeader, Context, Label, Layout, ScrollArea, TextEdit, Ui, Window};
 use egui_extras::{Column, TableBuilder};
 use regex::Regex;
 use reqwest::{Client, StatusCode};
@@ -9,8 +9,11 @@ use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender};
+use eframe::egui::Direction::TopDown;
+use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
+use crate::modules::filter::FilterMenu;
 use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, MultiUpLinkInformation, ProjectLink};
 
 
@@ -36,16 +39,20 @@ pub struct ExtractUI {
     currently_extracting: bool,
     // cancelled_extraction: bool,
     completed_links: Vec<MultiUpLink>,
+    toasts: Toasts,
+    shown_toast: bool,
     channels: Channels,
     pub error_log_open: bool,
-    error_log_text: String
+    error_log_text: String,
+    filter: FilterMenu
 }
 
 impl ExtractUI {
-    pub fn display(ui: &mut Ui, extract_ui: &mut ExtractUI) {
+    pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
         extract_ui.display_input_area(ui);
-        extract_ui.display_link_information(ui);
+        extract_ui.filter.update_hosts(&extract_ui.completed_links);
         extract_ui.display_output_area(ui);
+        extract_ui.toasts.show(ctx);
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
@@ -76,6 +83,7 @@ impl ExtractUI {
                 .clicked()
             {
                 self.currently_extracting = true;
+                self.shown_toast = false;
 
                 let (direct_links_sender, direct_links_receiver) = crossbeam_channel::unbounded();
                 let (cancel_sender, cancel_receiver) = crossbeam_channel::unbounded();
@@ -104,6 +112,8 @@ impl ExtractUI {
                 if let Ok(multiup_links) = receiver.try_recv() {
                     self.completed_links = multiup_links;
                     self.currently_extracting = false;
+                    self.filter.update_hosts(&self.completed_links);
+                    println!("{:?}", self.filter);
                 }
             }
 
@@ -144,7 +154,26 @@ impl ExtractUI {
                 }
 
                 ui.label(format!("{}/{} extracted successfully", successful_links, total_links));
+
+
+                if successful_links != total_links && !self.shown_toast {
+                    self.toasts = Toasts::new()
+                        .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
+                        .direction(TopDown);
+
+                    self.toasts.add(Toast {
+                        text: "Error extracting".into(),
+                        kind: ToastKind::Error,
+                        options: ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true)
+                            .show_icon(true)
+                    });
+
+                    self.shown_toast = true;
+                }
             }
+
 
             if ui.button("See errors").clicked() {
                 let mut errors = String::new();
@@ -208,16 +237,21 @@ impl ExtractUI {
             });
     }
 
-    fn display_link_information(&mut self, ui: &mut Ui) {
-        ui.collapsing("Link Information", |ui| {
-            let width = ui.available_width();
+    fn display_output_area(&mut self, ui: &mut Ui) {
+        ui.heading("Direct Links");
+        ui.horizontal(|ui| {
+            ui.set_height(ui.available_height());
+            let output_box_width = 0.80 * ui.available_width();
             TableBuilder::new(ui)
+                // Shrink width but not height
+                .auto_shrink([true, false])
                 // Column for MultiUp link information
-                .column(Column::remainder())
+                .column(Column::exact(output_box_width))
                 .cell_layout(Layout::left_to_right(Align::Center))
                 .body(|body| {
                     // Create rows for each MultiUp link, with only the visible rows being rendered
-                    body.rows(20.0, self.completed_links.len(), |row_index, mut row| {
+                    body.rows(60.0, self.completed_links.len(), |mut row| {
+                        let row_index = row.index();
                         match &self.completed_links[row_index] {
                             MultiUpLink::Project(project) => {
                                 if let Some(Ok(())) = project.status {
@@ -229,11 +263,8 @@ impl ExtractUI {
                                             //     });
                                             // });
 
-                                            let mut links = vec![];
+
                                             for link in project.download_links.as_ref().unwrap() {
-                                                links.push(link);
-                                            }
-                                            for link in links {
                                                 if let Some(information) = &link.link_information {
                                                     let mut display_information = String::new();
                                                     if let Some(file_name) = &information.file_name {
@@ -248,7 +279,14 @@ impl ExtractUI {
                                                     if let Some(date_upload) = &information.date_upload {
                                                         display_information += format!(" | Uploaded on {}", date_upload).as_str();
                                                     }
-                                                    ui.label(display_information);
+                                                    CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
+                                                        let filtered_links = self.filter.filter_links(link);
+                                                        println!("{:?}", &filtered_links);
+                                                        for link in filtered_links {
+                                                            println!("{}", link.clone());
+                                                            ui.label(link);
+                                                        }
+                                                    });
                                                 }
 
                                             }
@@ -273,29 +311,31 @@ impl ExtractUI {
                                         if let Some(date_upload) = &information.date_upload {
                                             display_information += format!(" | Uploaded on {}", date_upload).as_str();
                                         }
-                                        ui.label(display_information);
+
+                                        // ui.label(display_information);
+                                        CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
+                                            let filtered_links = self.filter.filter_links(download);
+                                            TableBuilder::new(ui).column(Column::auto()).body(|body| {
+                                                body.rows(20.0, filtered_links.len(), |mut row| {
+                                                    let row_index = row.index();
+                                                    row.col(|ui| {
+                                                        ui.label(&filtered_links[row_index]);
+                                                    });
+                                                });
+                                            });
+
+                                        });
                                     });
                                 }
                             }
                         };
+
                     })
                 });
+
+            self.filter.show(ui);
         });
     }
-
-    fn display_output_area(&mut self, ui: &mut Ui) {
-        ui.heading("Direct Links");
-        ui.horizontal(|ui| {
-            let output_box_width = 0.75 * ui.available_width();
-            TableBuilder::new(ui)
-                .column(Column::exact(output_box_width))
-                .body(|body| {});
-
-            self.display_filter_menu_area(ui);
-        });
-    }
-
-    fn display_filter_menu_area(&mut self, ui: &mut Ui) {}
 }
 
 // Extraction Functions
@@ -312,7 +352,8 @@ async fn extract_direct_links(input_text: &str, recheck_validity: bool, cancel_r
     let completed_links = get_direct_links(processed_links, recheck_validity).await;
     let time_taken = time_now.elapsed();
     println!("{}", time_taken.as_secs_f32());
-    completed_links
+    println!("{:?}", completed_links);
+    return completed_links;
 }
 
 /// Detects MultiUp links in the given input text.
@@ -542,7 +583,6 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
     // At the beginning of the function
     let semaphore = Arc::new(Semaphore::new(200));
     let mut tasks = Vec::new();
-    println!("{:?}", multiup_links);
     for link in multiup_links {
         match link {
             MultiUpLink::Project(project_link) => {
