@@ -24,14 +24,49 @@ impl Default for FilterMenu {
 }
 
 impl FilterMenu {
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui, links: &Vec<MultiUpLink>) {
+        // Calculate number of each type
+        let mut valid: u32 = 0;
+        let mut invalid: u32 = 0;
+        let mut unknown: u32 = 0;
+        let mut unchecked: u32 = 0;
+
+        for link in links {
+            match link {
+                MultiUpLink::Project(project) => {
+                    if let Some(Ok(_)) = &project.status {
+                        for download_link in project.download_links.as_ref().unwrap() {
+                            for link in download_link.direct_links.as_ref().unwrap() {
+                                match link.validity.as_str() {
+                                    "valid" => valid += 1,
+                                    "invalid" => invalid += 1,
+                                    "unknown" => unknown += 1,
+                                    _ => unchecked += 1,
+                                }
+                            }
+                        }
+                    }
+                }
+                MultiUpLink::Download(download) => {
+                    for link in download.direct_links.as_ref().unwrap() {
+                        match link.validity.as_str() {
+                            "valid" => valid += 1,
+                            "invalid" => invalid += 1,
+                            "unknown" => unknown += 1,
+                            _ => unchecked += 1,
+                        }
+                    }
+                }
+            }
+        }
         ui.vertical(|ui| {
             // ui.set_max_width(200.0);
+
             ui.label("Host validity: ");
-            ui.checkbox(&mut self.valid, "Valid");
-            ui.checkbox(&mut self.invalid, "Invalid");
-            ui.checkbox(&mut self.unknown, "Unknown");
-            ui.checkbox(&mut self.unchecked, "Unchecked");
+            ui.checkbox(&mut self.valid, format!("Valid ({})", valid));
+            ui.checkbox(&mut self.invalid, format!("Invalid ({})", invalid));
+            ui.checkbox(&mut self.unknown, format!("Unknown ({})", unknown));
+            ui.checkbox(&mut self.unchecked, format!("Unchecked ({})", unchecked));
 
             ui.separator();
 
