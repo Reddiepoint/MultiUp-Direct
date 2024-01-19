@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use eframe::egui::{ScrollArea, Ui};
 use crate::modules::links::{DownloadLink, MultiUpLink};
 
@@ -8,7 +8,7 @@ pub struct FilterMenu {
     pub invalid: bool,
     pub unknown: bool,
     pub unchecked: bool,
-    pub hosts: Vec<(String, bool)>,
+    pub hosts: Vec<(String, bool, u32)>,
 }
 
 impl Default for FilterMenu {
@@ -93,7 +93,7 @@ impl FilterMenu {
                 for i in 0..self.hosts.len() {
                     let host = &mut self.hosts[i];
                     let host_name = &host.0.clone();
-                    let checkbox = ui.checkbox(&mut host.1, host_name);
+                    let checkbox = ui.checkbox(&mut host.1, format!("{} ({})", host_name, host.2));
                     checkbox.context_menu(|ui| {
                         if ui.button(format!("Select {} links only", host_name)).clicked() {
                             for host in self.hosts.iter_mut() {
@@ -108,14 +108,14 @@ impl FilterMenu {
     }
 
     pub fn update_hosts(&mut self, links: &Vec<MultiUpLink>) {
-        let mut hosts: BTreeSet<String> = BTreeSet::new();
+        let mut hosts: BTreeMap<String, u32> = BTreeMap::new();
         for link in links {
             match link {
                 MultiUpLink::Project(project) => {
                     if let Some(Ok(_)) = &project.status {
                         for link in project.download_links.as_ref().unwrap() {
                             for link in link.direct_links.as_ref().unwrap() {
-                                hosts.insert(link.host.to_string());
+                                hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
                             }
                         }
                     }
@@ -123,13 +123,13 @@ impl FilterMenu {
                 MultiUpLink::Download(download) => {
                     if let Some(Ok(_)) = &download.status {
                         for link in download.direct_links.as_ref().unwrap() {
-                            hosts.insert(link.host.to_string());
+                            hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
                         }
                     }
                 }
             }
         }
-        self.hosts = hosts.into_iter().map(|host| (host, true)).collect();
+        self.hosts = hosts.into_iter().map(|(host, count)| (host, true, count)).collect();
     }
     pub fn filter_links(&self, download_link: &DownloadLink) -> Vec<String> {
         let displayed_links: Vec<String> = vec![];
@@ -138,7 +138,7 @@ impl FilterMenu {
             Some(links) => {
                 links.iter()
                     .filter(|link| {
-                        let host_check = self.hosts.iter().any(|(host_name, checked)| {
+                        let host_check = self.hosts.iter().any(|(host_name, checked, count)| {
                            &link.host == host_name && *checked
                         });
 
