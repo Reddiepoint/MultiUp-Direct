@@ -229,7 +229,7 @@ impl ExtractUI {
         Window::new("Error Log")
             .open(&mut self.error_log_open)
             .show(ctx, |ui| {
-                ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Error Log").show(ui, |ui| {
+                ScrollArea::vertical().id_source("Error Log").min_scrolled_height(ui.available_height()).show(ui, |ui| {
                     let mut error = self.error_log_text.clone();
                     ui.add(TextEdit::multiline(&mut error));
                 });
@@ -242,7 +242,7 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.set_height(height);
             let output_box_width = 0.80 * ui.available_width();
-            ScrollArea::vertical().id_source("Direct links output").show(ui, |ui| {
+            ScrollArea::vertical().id_source("Direct Links Output").show(ui, |ui| {
                 ui.vertical(|ui| {
                     for link in &self.completed_links {
                         match link {
@@ -252,34 +252,42 @@ impl ExtractUI {
                                         .id_source(&project.link_id)
                                         .default_open(true)
                                         .show(ui, |ui| {
-                                            for link in project.download_links.as_ref().unwrap() {
-                                                if let Some(information) = &link.link_information {
-                                                    let mut display_information = String::new();
-                                                    if let Some(file_name) = &information.file_name {
-                                                        display_information += file_name;
-                                                    }
-                                                    if let Some(description) = &information.description {
-                                                        display_information += format!(" - {}", description).as_str();
-                                                    }
-                                                    if let Some(file_size) = &information.size {
-                                                        display_information += format!(" ({} bytes)", file_size).as_str();
-                                                    }
-                                                    if let Some(date_upload) = &information.date_upload {
-                                                        display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                                    }
-                                                    CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
-                                                        let filtered_links = self.filter.filter_links(link);
-                                                        TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                                            body.rows(20.0, filtered_links.len(), |mut row| {
-                                                                let row_index = row.index();
-                                                                row.col(|ui| {
-                                                                    ui.label(&filtered_links[row_index]);
+                                            TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                let (download_links, heights) = calculate_row_heights(project.download_links.as_ref().unwrap());
+                                                body.heterogeneous_rows(heights.into_iter(), |mut row| {
+                                                    let row_index = row.index();
+                                                    let link = download_links[row_index];
+                                                    if let Some(information) = &link.link_information {
+                                                        let mut display_information = String::new();
+                                                        if let Some(file_name) = &information.file_name {
+                                                            display_information += file_name;
+                                                        }
+                                                        if let Some(description) = &information.description {
+                                                            display_information += format!(" - {}", description).as_str();
+                                                        }
+                                                        if let Some(file_size) = &information.size {
+                                                            display_information += format!(" ({} bytes)", file_size).as_str();
+                                                        }
+                                                        if let Some(date_upload) = &information.date_upload {
+                                                            display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                                        }
+                                                        row.col(|ui| {
+                                                            CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
+                                                                let filtered_links = self.filter.filter_links(link);
+                                                                TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                                    body.rows(20.0, filtered_links.len(), |mut row| {
+                                                                        let row_index = row.index();
+                                                                        row.col(|ui| {
+                                                                            ui.label(&filtered_links[row_index]);
+                                                                        });
+                                                                    });
                                                                 });
                                                             });
                                                         });
-                                                    });
-                                                }
-                                            }
+                                                    }
+                                                });
+                                            });
+
                                         });
                                 }
                             },
@@ -300,19 +308,27 @@ impl ExtractUI {
                                         display_information += format!(" | Uploaded on {}", date_upload).as_str();
                                     }
 
-                                    // ui.label(display_information);
-                                    CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
-                                        let filtered_links = self.filter.filter_links(download);
-                                        TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                            body.rows(20.0, filtered_links.len(), |mut row| {
-                                                let row_index = row.index();
-                                                row.col(|ui| {
-                                                    ui.label(&filtered_links[row_index]);
+                                    let number_of_direct_links = download.direct_links.as_ref().unwrap().iter().len() as f32;
+                                    let height = 20.0 + number_of_direct_links * 20.0;
+                                    TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                        body.rows(height, 1, |mut row| {
+                                            row.col(|ui| {
+                                                CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
+                                                    let filtered_links = self.filter.filter_links(download);
+                                                    TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                        body.rows(20.0, filtered_links.len(), |mut row| {
+                                                            let row_index = row.index();
+                                                            row.col(|ui| {
+                                                                ui.label(&filtered_links[row_index]);
+                                                            });
+                                                        });
+                                                    });
+
                                                 });
                                             });
                                         });
-
                                     });
+
                                 }
                             }
                         };
@@ -755,4 +771,17 @@ fn get_title_and_size_from_title_text(title: ElementRef) -> (String, u64) {
     };
 
     (file_name.to_string(), size_in_bytes)
+}
+
+fn calculate_row_heights(links: &HashSet<DownloadLink>) -> (Vec<&DownloadLink>, Vec<f32>) {
+    let mut heights = vec![];
+    let mut download_links = vec![];
+    for link in links {
+        let number_of_direct_links = link.direct_links.as_ref().unwrap().iter().len() as f32;
+        let height = 20.0 + number_of_direct_links * 20.0;
+        heights.push(height);
+        download_links.push(link);
+    }
+
+    return (download_links, heights);
 }

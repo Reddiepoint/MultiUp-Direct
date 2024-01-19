@@ -36,26 +36,31 @@ impl FilterMenu {
                 MultiUpLink::Project(project) => {
                     if let Some(Ok(_)) = &project.status {
                         for download_link in project.download_links.as_ref().unwrap() {
-                            for link in download_link.direct_links.as_ref().unwrap() {
-                                match link.validity.as_str() {
-                                    "valid" => valid += 1,
-                                    "invalid" => invalid += 1,
-                                    "unknown" => unknown += 1,
-                                    _ => unchecked += 1,
+                            if let Some(Ok(())) = &download_link.status {
+                                for link in download_link.direct_links.as_ref().unwrap() {
+                                    match link.validity.as_str() {
+                                        "valid" => valid += 1,
+                                        "invalid" => invalid += 1,
+                                        "unknown" => unknown += 1,
+                                        _ => unchecked += 1,
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 MultiUpLink::Download(download) => {
-                    for link in download.direct_links.as_ref().unwrap() {
-                        match link.validity.as_str() {
-                            "valid" => valid += 1,
-                            "invalid" => invalid += 1,
-                            "unknown" => unknown += 1,
-                            _ => unchecked += 1,
+                    if let Some(Ok(())) = &download.status {
+                        for link in download.direct_links.as_ref().unwrap() {
+                            match link.validity.as_str() {
+                                "valid" => valid += 1,
+                                "invalid" => invalid += 1,
+                                "unknown" => unknown += 1,
+                                _ => unchecked += 1,
+                            }
                         }
                     }
+
                 }
             }
         }
@@ -114,9 +119,12 @@ impl FilterMenu {
                 MultiUpLink::Project(project) => {
                     if let Some(Ok(_)) = &project.status {
                         for link in project.download_links.as_ref().unwrap() {
-                            for link in link.direct_links.as_ref().unwrap() {
-                                hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+                            if let Some(Ok(_)) = &link.status {
+                                for link in link.direct_links.as_ref().unwrap() {
+                                    hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+                                }
                             }
+
                         }
                     }
                 }
