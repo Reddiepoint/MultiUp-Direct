@@ -249,7 +249,18 @@ impl ExtractUI {
     }
 
     fn display_output_area(&mut self, ui: &mut Ui) {
-        ui.heading("Direct Links");
+        ui.heading("Extracted Links");
+
+        ui.horizontal(|ui| {
+            ui.add(TextEdit::singleline(&mut self.search_filter)
+                .id_source("Link Search Filter")
+                .hint_text("Type to search for files"));
+
+            if ui.button("X").clicked() {
+                self.search_filter = String::new();
+            }
+        });
+
         let height = ui.available_height();
         self.visible_links = vec![];
         self.direct_links = HashSet::new();
@@ -264,7 +275,7 @@ impl ExtractUI {
                             MultiUpLink::Project(project) => {
                                 if let Some(Ok(())) = project.status {
                                     for link in project.download_links.as_ref().unwrap() {
-                                        let mut filtered_links = self.filter.filter_links(link);
+                                        let filtered_links = self.filter.filter_links(link);
                                         for link in filtered_links {
                                             self.direct_links.insert(link);
                                         }
@@ -283,10 +294,12 @@ impl ExtractUI {
                                                     body.heterogeneous_rows(heights.into_iter(), |mut row| {
                                                         let row_index = row.index();
                                                         let link = download_links[row_index];
+                                                        let mut searched = false;
                                                         if let Some(information) = &link.link_information {
                                                             let mut display_information = String::new();
                                                             if let Some(file_name) = &information.file_name {
                                                                 display_information += file_name;
+                                                                searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
                                                             }
                                                             if let Some(description) = &information.description {
                                                                 display_information += format!(" - {}", description).as_str();
@@ -297,37 +310,39 @@ impl ExtractUI {
                                                             if let Some(date_upload) = &information.date_upload {
                                                                 display_information += format!(" | Uploaded on {}", date_upload).as_str();
                                                             }
-                                                            row.col(|ui| {
-                                                                CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
-                                                                    let filtered_links = self.filter.filter_links(link);
-                                                                    for link in &filtered_links {
-                                                                        self.visible_links.push(link.clone());
-                                                                        let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                                        if url_label.hovered() || self.selected_links.contains(link) {
-                                                                            url_label.clone().highlight();
-                                                                        }
-                                                                        if url_label.clicked() {
-                                                                            let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                            if control_is_down {
-                                                                                if !self.selected_links.remove(link.as_str()) {
-                                                                                    self.selected_links.insert(link.clone());
-                                                                                };
-                                                                                self.selection = (None, None);
-                                                                            } else if shift_is_down {
-                                                                                if self.selection.0.is_none() {
-                                                                                    self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                } else {
-                                                                                    self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                };
-                                                                            } else {
-                                                                                self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                            if searched {
+                                                                row.col(|ui| {
+                                                                    CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
+                                                                        let filtered_links = self.filter.filter_links(link);
+                                                                        for link in &filtered_links {
+                                                                            self.visible_links.push(link.clone());
+                                                                            let url_label = ui.add(Label::new(link).sense(Sense::click()));
+                                                                            if url_label.hovered() || self.selected_links.contains(link) {
+                                                                                url_label.clone().highlight();
                                                                             }
-                                                                        }
+                                                                            if url_label.clicked() {
+                                                                                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                                                                if control_is_down {
+                                                                                    if !self.selected_links.remove(link.as_str()) {
+                                                                                        self.selected_links.insert(link.clone());
+                                                                                    };
+                                                                                    self.selection = (None, None);
+                                                                                } else if shift_is_down {
+                                                                                    if self.selection.0.is_none() {
+                                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                    } else {
+                                                                                        self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                    };
+                                                                                } else {
+                                                                                    self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                }
+                                                                            }
 
-                                                                        url_labels.push((url_label, link.clone()));
-                                                                    }
+                                                                            url_labels.push((url_label, link.clone()));
+                                                                        }
+                                                                    });
                                                                 });
-                                                            });
+                                                            }
                                                         }
                                                     });
                                                 });
@@ -338,8 +353,10 @@ impl ExtractUI {
                                 if let Some(Ok(())) = download.status {
                                     let information = download.link_information.as_ref().unwrap();
                                     let mut display_information = String::new();
+                                    let mut searched = false;
                                     if let Some(file_name) = &information.file_name {
                                         display_information += file_name;
+                                        searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
                                     }
                                     if let Some(description) = &information.description {
                                         display_information += format!(" - {}", description).as_str();
@@ -354,48 +371,50 @@ impl ExtractUI {
                                     let filtered_links = self.filter.filter_links(download);
                                     let number_of_direct_links = filtered_links.len() as f32;
                                     let height = 20.0 + number_of_direct_links * 20.0;
-
-                                    ui.push_id(&download.link_id, |ui| {
-                                        TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                            body.rows(height, 1, |mut row| {
-                                                // let row_index = row.index();
-                                                row.col(|ui| {
-                                                    CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
-                                                        for link in &filtered_links {
-                                                            self.visible_links.push(link.clone());
-                                                            let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                            if url_label.hovered() || self.selected_links.contains(link) {
-                                                                url_label.clone().highlight();
-                                                            }
-                                                            if url_label.clicked() {
-                                                                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                if control_is_down {
-                                                                    if !self.selected_links.remove(link.as_str()) {
-                                                                        self.selected_links.insert(link.clone());
-                                                                    };
-                                                                    self.selection = (None, None);
-                                                                } else if shift_is_down {
-
-                                                                    if self.selection.0.is_none() {
-                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                    } else {
-                                                                        self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                    };
-                                                                } else {
-                                                                    self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                    if searched {
+                                        ui.push_id(&download.link_id, |ui| {
+                                            TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                body.rows(height, 1, |mut row| {
+                                                    // let row_index = row.index();
+                                                    row.col(|ui| {
+                                                        CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
+                                                            for link in &filtered_links {
+                                                                self.visible_links.push(link.clone());
+                                                                let url_label = ui.add(Label::new(link).sense(Sense::click()));
+                                                                if url_label.hovered() || self.selected_links.contains(link) {
+                                                                    url_label.clone().highlight();
                                                                 }
-                                                            }
+                                                                if url_label.clicked() {
+                                                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                                                    if control_is_down {
+                                                                        if !self.selected_links.remove(link.as_str()) {
+                                                                            self.selected_links.insert(link.clone());
+                                                                        };
+                                                                        self.selection = (None, None);
+                                                                    } else if shift_is_down {
 
-                                                            url_labels.push((url_label, link.clone()))
-                                                        }
+                                                                        if self.selection.0.is_none() {
+                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                        } else {
+                                                                            self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                        };
+                                                                    } else {
+                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                    }
+                                                                }
+
+                                                                url_labels.push((url_label, link.clone()))
+                                                            }
+                                                        });
                                                     });
                                                 });
                                             });
                                         });
-                                    });
-                                    for link in filtered_links {
-                                        self.direct_links.insert(link);
+                                        for link in filtered_links {
+                                            self.direct_links.insert(link);
+                                        }
                                     }
+
                                 }
                             }
                         };
@@ -417,12 +436,15 @@ impl ExtractUI {
             }
         }
 
-        let selected_links = self.selected_links.clone();
-        for link in selected_links.iter() {
-            if !self.direct_links.contains(link) {
-                self.selected_links.remove(link);
+        if self.search_filter.is_empty() {
+            let selected_links = self.selected_links.clone();
+            for link in selected_links.iter() {
+                if !self.direct_links.contains(link) {
+                    self.selected_links.remove(link);
+                }
             }
         }
+
 
         for (url_label, link) in url_labels {
             url_label.context_menu(|ui| {
@@ -440,7 +462,7 @@ impl ExtractUI {
                 };
 
                 if !self.selected_links.is_empty() && ui.button("Copy selected links").clicked() {
-                    let selected_links: Vec<String> = self.selected_links.iter().map(|url| url.clone()).collect();
+                    let selected_links: Vec<String> = self.selected_links.iter().cloned().collect();
 
                     ui.output_mut(|output| output.copied_text = selected_links.join("\n"));
                     self.toasts.add(Toast {
