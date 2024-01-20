@@ -1,6 +1,7 @@
 use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
 use crate::modules::extract::ExtractUI;
+use crate::modules::help::HelpUI;
 
 
 /// A struct representing the application UI.
@@ -9,7 +10,8 @@ use crate::modules::extract::ExtractUI;
 #[derive(Default)]
 pub struct MultiUpDirect {
     tab_bar: TabBar,
-    extract: ExtractUI,
+    extract_ui: ExtractUI,
+    help_ui: HelpUI,
 }
 
 impl App for MultiUpDirect {
@@ -31,7 +33,8 @@ impl MultiUpDirect {
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
 
                 // Menu bar/toolbar elements
-                MultiUpDirect::menu_bar(ui);
+                self.menu_bar(ui, ctx);
+
             });
         });
     }
@@ -39,9 +42,26 @@ impl MultiUpDirect {
     /// Displays menu bar options in the top bar.
     ///
     /// This method is responsible for adding toolbar functionality for different options.
-    fn menu_bar(ui: &mut Ui) {
+    fn menu_bar(&mut self, ui: &mut Ui, ctx: &Context) {
         menu::bar(ui, |ui| {
             ui.menu_button("Help", |ui| {
+                if ui.button("Show help").clicked() {
+                    self.help_ui.show_help = true;
+                    ui.close_menu();
+                };
+
+
+                ui.separator();
+
+                if ui.button("Check for updates").clicked() {
+                    let (tx, rx) = crossbeam_channel::unbounded();
+                    // (self.help_ui.update_sender, self.help_ui.update_receiver) = (Some(tx), Some(rx));
+                    self.help_ui.update_channels(tx, rx);
+                    self.help_ui.show_update = true;
+                    ui.close_menu();
+                }
+
+
                 ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
             })
         });
@@ -54,12 +74,12 @@ impl MultiUpDirect {
     fn display_central_panel(&mut self, ctx: &Context) {
         CentralPanel::default().show(ctx, |ui| {
             match &self.tab_bar {
-               TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract)
+                TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
             }
 
-            if self.extract.error_log_open {
-                ExtractUI::display_error_log(&mut self.extract, ctx);
-            }
+            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
+            self.help_ui.show_help(ctx);
+            self.help_ui.show_update(ctx);
 
         });
     }
@@ -71,5 +91,5 @@ impl MultiUpDirect {
 #[derive(Default, PartialEq)]
 enum TabBar {
     #[default]
-    Extract
+    Extract,
 }

@@ -15,6 +15,7 @@ use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 use crate::modules::filter::FilterMenu;
+use crate::modules::general::get_page_html;
 use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, MultiUpLinkInformation, ProjectLink};
 
 
@@ -42,7 +43,7 @@ pub struct ExtractUI {
     toasts: Toasts,
     shown_toast: bool,
     channels: Channels,
-    pub error_log_open: bool,
+    error_log_open: bool,
     error_log_text: String,
     filter: FilterMenu,
     selection: (Option<usize>, Option<usize>),
@@ -590,7 +591,7 @@ async fn process_project_link(project_link: &str, cancel_receiver: Receiver<bool
     // Mirror links
     let mirror_regex = MIRROR_REGEX.get().unwrap();
 
-    let (id, name, download_links) = get_project_information(project_link, 0, cancel_receiver).await;
+    let (id, name, download_links) = get_project_information(project_link, cancel_receiver).await;
     let download_links = match download_links {
         Ok(download_links) => download_links,
         Err(error) => {
@@ -627,34 +628,16 @@ static PROJECT_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 /// Parses the project link for an ID, parses the page title for a name and extracts download links.
 /// If there is no name, it is set to the ID.
 #[async_recursion]
-async fn get_project_information(project_link: &str, try_count: u8, cancel_receiver: Receiver<bool>) -> (String, String, Result<Vec<String>, LinkError>) {
+async fn get_project_information(project_link: &str, cancel_receiver: Receiver<bool>) -> (String, String, Result<Vec<String>, LinkError>) {
     let link_parts: Vec<&str> = project_link.split('/').collect();
     let id = link_parts.last().unwrap().to_string();
     let name = id.clone();
 
-    if let Ok(_) | Err(TryRecvError::Disconnected) = cancel_receiver.try_recv() {
-        return (id, name, Err(LinkError::Cancelled));
-    }
-
-    if try_count >= 10 {
-        return (id, name, Err(LinkError::TimedOut));
-    }
-
     let client = Client::new();
-    let server_response = match client.get(project_link).send().await {
-        Ok(response) => response,
-        Err(error) => return (id, name, Err(LinkError::Reqwest(error))),
-    };
-
-    let html = match server_response.error_for_status() {
-        Ok(res) => res.text().await.unwrap().to_string(),
+    let html = match get_page_html(project_link, &client, Some(cancel_receiver), 0).await {
+        Ok(html) => html,
         Err(error) => {
-            // Repeat if error is not 404, otherwise, return invalid
-            if error.status().unwrap() != StatusCode::NOT_FOUND {
-                let _ = tokio::time::sleep(Duration::from_millis(100)).await;
-                return get_project_information(project_link, try_count + 1, cancel_receiver).await;
-            }
-            return (id, name, Err(LinkError::Invalid));
+            return (id, name, Err(error));
         }
     };
 
@@ -829,7 +812,7 @@ async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLi
 }
 
 async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>) -> DownloadLink {
-    let information = get_mirror_information(&mirror_link, 0, cancel_receiver).await;
+    let information = get_mirror_information(&mirror_link, cancel_receiver).await;
     match information {
         Ok((direct_links, link_information)) => {
             download_link.direct_links = Some(direct_links);
@@ -849,35 +832,16 @@ static MIRROR_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 /// Retrieves 
 #[async_recursion]
-async fn get_mirror_information(mirror_link: &str, try_count: u8, cancel_receiver: Receiver<bool>) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
+async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<bool>) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
     let mut direct_links: BTreeSet<DirectLink> = BTreeSet::new();
 
-    if let Ok(_) | Err(TryRecvError::Disconnected) = cancel_receiver.try_recv() {
-        return Err(LinkError::Cancelled);
-    }
-
-    if try_count >= 10 {
-        return Err(LinkError::TimedOut);
-    }
-
     let client = Client::new();
-    let server_response = match client.get(mirror_link).send().await {
-        Ok(response) => response,
-        Err(error) => return Err(LinkError::Reqwest(error)),
-    };
-
-    let html = match server_response.error_for_status() {
-        Ok(res) => res.text().await.unwrap().to_string(),
+    let html = match get_page_html(mirror_link, &client, Some(cancel_receiver), 0).await {
+        Ok(html) => html,
         Err(error) => {
-            // Repeat if error is not 404, otherwise, return invalid
-            if error.status().unwrap() != StatusCode::NOT_FOUND {
-                let _ = tokio::time::sleep(Duration::from_millis(100)).await;
-                return get_mirror_information(mirror_link, try_count + 1, cancel_receiver).await;
-            }
-            return Err(LinkError::Invalid);
+            return Err(error);
         }
     };
-
     let parsed_page = scraper::Html::parse_document(&html);
 
     let queue_selector = QUEUE_SELECTOR.get_or_init(|| Selector::parse(r#"body > section > div > section > div.row > div > section > div > div > div:nth-child(2) > div > h4"#).unwrap());
