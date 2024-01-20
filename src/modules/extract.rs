@@ -1,14 +1,13 @@
-use std::any::Any;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use async_recursion::async_recursion;
 use eframe::egui::{Align2, Button, CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui, Window};
 use egui_extras::{Column, TableBuilder};
 use regex::Regex;
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use scraper::{ElementRef, Selector};
 use std::sync::{Arc, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
@@ -26,7 +25,7 @@ struct Channels {
 }
 
 impl Channels {
-    fn new(direct_links_receiver: Option<Receiver<Vec<MultiUpLink>>>, cancel_sender: Option<Sender<bool>>,) -> Self {
+    fn new(direct_links_receiver: Option<Receiver<Vec<MultiUpLink>>>, cancel_sender: Option<Sender<bool>>) -> Self {
         Self {
             direct_links: direct_links_receiver,
             cancel: cancel_sender
@@ -478,7 +477,7 @@ impl ExtractUI {
                 };
 
                 if ui.button("Copy all links").clicked() {
-                    let urls = self.direct_links.iter().map(|url| url.clone()).collect::<Vec<String>>();
+                    let urls = self.direct_links.iter().cloned().collect::<Vec<String>>();
                     ui.output_mut(|output| output.copied_text = urls.join("\n"));
                     self.toasts.add(Toast {
                         text: "Copied all links".into(),
@@ -564,7 +563,7 @@ impl ExtractUI {
                     match success.is_empty() {
                         true => {
                             self.toasts.add(Toast {
-                                text: "Opened links".into(),
+                                text: "Opened all links".into(),
                                 kind: ToastKind::Success,
                                 options: ToastOptions::default()
                                     .duration_in_seconds(5.0)
@@ -574,7 +573,7 @@ impl ExtractUI {
                         }
                         false => {
                             self.toasts.add(Toast {
-                                text: format!("Failed to open links: {}", success).into(),
+                                text: format!("Failed to open all links: {}", success).into(),
                                 kind: ToastKind::Info,
                                 options: ToastOptions::default()
                                     .duration_in_seconds(5.0)
@@ -640,7 +639,7 @@ fn detect_links(input_text: &str) -> Vec<String> {
         let link = captures[0].to_string();
         detected_links.push(link);
     }
-        
+
     // Return detected links
     return detected_links;
 }
@@ -975,7 +974,7 @@ async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLin
 static MIRROR_HOSTS_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static MIRROR_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
-/// Retrieves 
+/// Retrieves
 #[async_recursion]
 async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<bool>) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
     let mut direct_links: BTreeSet<DirectLink> = BTreeSet::new();
@@ -993,7 +992,7 @@ async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<boo
     if let Some(_queue_message) = parsed_page.select(queue_selector).next() {
         return Err(LinkError::InQueue);
     }
-    
+
     let mirror_hosts_selector = MIRROR_HOSTS_SELECTOR.get_or_init(|| Selector::parse(r#"a.host[namehost], button.host[namehost]"#).unwrap());
     for button in parsed_page.select(mirror_hosts_selector) {
         if let Some(direct_link) =  get_direct_link_from_button(button) {
@@ -1009,7 +1008,7 @@ async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<boo
     let file_name_selector = MIRROR_TITLE_SELECTOR.get_or_init(|| Selector::parse(r#"h2.text-truncate"#).unwrap());
     let title = get_title_and_size_from_title_text(parsed_page.select(file_name_selector).next().unwrap());
     let link_information = MultiUpLinkInformation::new_basic(title.0, title.1);
-    
+
     Ok((direct_links, link_information))
 }
 

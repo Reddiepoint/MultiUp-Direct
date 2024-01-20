@@ -33,7 +33,7 @@ impl MultiUpDirect {
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
 
                 // Menu bar/toolbar elements
-                self.menu_bar(ui, ctx);
+                self.menu_bar(ui);
 
             });
         });
@@ -42,7 +42,7 @@ impl MultiUpDirect {
     /// Displays menu bar options in the top bar.
     ///
     /// This method is responsible for adding toolbar functionality for different options.
-    fn menu_bar(&mut self, ui: &mut Ui, ctx: &Context) {
+    fn menu_bar(&mut self, ui: &mut Ui) {
         menu::bar(ui, |ui| {
             ui.menu_button("Help", |ui| {
                 if ui.button("Show help").clicked() {

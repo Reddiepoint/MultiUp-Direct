@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
@@ -177,7 +177,7 @@ pub enum LinkError {
     Invalid,
     InQueue,
     NoLinks,
-    Other,
+    // Other,
     Reqwest(reqwest::Error),
     TimedOut
 }

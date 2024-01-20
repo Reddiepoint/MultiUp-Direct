@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use eframe::egui::{ScrollArea, Ui};
 use crate::modules::links::{DownloadLink, MultiUpLink};
 
@@ -146,7 +146,7 @@ impl FilterMenu {
             Some(links) => {
                 links.iter()
                     .filter(|link| {
-                        let host_check = self.hosts.iter().any(|(host_name, checked, count)| {
+                        let host_check = self.hosts.iter().any(|(host_name, checked, _count)| {
                            &link.host == host_name && *checked
                         });
 

@@ -6,7 +6,6 @@ use eframe::egui::{Context, ScrollArea, Window};
 use reqwest::Client;
 use scraper::{Element, Selector};
 use crate::modules::general::get_page_html;
-use crate::modules::links::LinkError;
 
 #[derive(Default)]
 pub enum UpdateStatus {
