@@ -89,7 +89,7 @@ impl ExtractUI {
                 .clicked()
             {
                 self.currently_extracting = true;
-                self.shown_toast = false;
+
 
                 let (direct_links_sender, direct_links_receiver) = crossbeam_channel::unbounded();
                 let (cancel_sender, cancel_receiver) = crossbeam_channel::unbounded();
@@ -123,6 +123,7 @@ impl ExtractUI {
                 if let Ok(multiup_links) = receiver.try_recv() {
                     self.completed_links = multiup_links;
                     self.currently_extracting = false;
+                    self.shown_toast = false;
                     self.filter.update_hosts(&self.completed_links);
                 }
             }
