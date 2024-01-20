@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
@@ -146,7 +146,7 @@ impl DirectLink {
 pub struct MultiUpLinkInformation {
     pub error: String,
     pub file_name: Option<String>,
-    pub size: Option<u64>,
+    pub size: Option<String>,
     pub date_upload: Option<String>,
     pub time_upload: Option<u64>,
     pub date_last_download: Option<String>,
@@ -156,7 +156,7 @@ pub struct MultiUpLinkInformation {
 }
 
 impl MultiUpLinkInformation {
-    pub fn new_basic(file_name: String, size: u64) -> Self {
+    pub fn new_basic(file_name: String, size: String) -> Self {
         Self {
             error: "success".to_string(),
             file_name: Some(file_name),
@@ -172,6 +172,7 @@ impl MultiUpLinkInformation {
 }
 #[derive(Debug)]
 pub enum LinkError {
+    APIError(String),
     Cancelled,
     Invalid,
     InQueue,
