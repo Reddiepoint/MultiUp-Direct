@@ -100,7 +100,7 @@ impl FilterMenu {
                     let host_name = &host.0.clone();
                     let checkbox = ui.checkbox(&mut host.1, format!("{} ({})", host_name, host.2));
                     checkbox.context_menu(|ui| {
-                        if ui.button(format!("Select {} links only", host_name)).clicked() {
+                        if ui.button(format!("Show {} links only", host_name)).clicked() {
                             for host in self.hosts.iter_mut() {
                                 host.1 = &host.0 == host_name;
                             };

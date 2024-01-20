@@ -585,8 +585,16 @@ impl ExtractUI {
                     ui.close_menu();
                 };
 
+                ui.separator();
+
+                if ui.button("Select all links").clicked() {
+                    for link in self.direct_links.iter() {
+                        self.selected_links.insert(link.clone());
+                    }
+                    ui.close_menu();
+                }
+
                 if !self.selected_links.is_empty() {
-                    ui.separator();
                     if ui.button("Deselect all links").clicked() {
                         self.selected_links = HashSet::new();
                         self.toasts.add(Toast {
