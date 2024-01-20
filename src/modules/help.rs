@@ -35,27 +35,25 @@ static CHANGELOG_SELECTOR: OnceLock<Selector> = OnceLock::new();
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 pub const HELP_MESSAGE: &str = "Instructions:\n\
 1. Paste your MultiUp links into the first box.\n\
-You can paste as many links as you want, separated by a new line. \
-As long as a line starts with a link, it will be recognised. \
-This means you can paste a page with links (e.g., FitGirl). \
+You can paste as many links as you want and you can paste a page with links (e.g., FitGirl). \
 Duplicate links will also be filtered out.\n\n\
-2. You can check the \"Re-check host status\" box if you want MultiUp to verify the availability of the hosts.\n\
-This will give you more information about the files, which will appear in a section called \"Link Information\".\n\
-The information about the files retrieved without this feature enabled is much more limited.\n\
-Note that enabling this feature will cause the generation times to be much longer.\n\n\
+2. You can check the \"Recheck link validity\" box if you want MultiUp to verify the validity of the hosts.\n\
+Note that enabling this feature will cause the generation times to be much longer, \
+since each host is checked individually.\n\n\
 3. Click on \"Generate links\" to get the direct links.\n\
-You can see the progress of the generation in the status below the box.\n\n\
+Click the \"Cancel now\" button to cancel any remaining links. You may not see any immediate feedback, \
+but this is normal, as MultiUp Direct waits for the links that have already been extracted, \
+but no new links will be extracted.\n\n\
 4. Select the links you want to use. You can do this by:\n\t\
 - Holding down CTRL to select individual links.\n\t\
 - Clicking and holding SHIFT to select a range of links.\n\n\
 5. Right-click on a link or selection of links to see more options, such as copying or opening the links in your browser.\n\n\
 6. Use the filter menu to narrow down your choices:\n\t\
 - \"Unknown\": These are the links that MultiUp could not check after verification.\n\t\
-- \"Unchecked\": These are the links that were not verified by MultiUp. (Links will only appear here if you do not check the \"Re-check host status\" box).\n\t\
+- \"Unchecked\": These are the links that were not verified by MultiUp. (Links will only appear here if you \
+do not check the \"Recheck link validity\" box).\n\t\
 - Hosts: You can choose which hosts you want to see links for. You can right-click on a host and select \"Select ____ links only\" to quickly filter out the rest.\n\n\
-7. You can choose to hide direct links associated with a MultiUp link by deselecting it in \"Link Information\".\n\
-Like the filter menu, you can right-click on a checkbox to see the context menu to select or deselect all the links, \
-and you can use SHIFT to select a range of links to display.";
+";
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 

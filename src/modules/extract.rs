@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use async_recursion::async_recursion;
-use eframe::egui::{Align2, Button, CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, Ui, Window};
+use eframe::egui::{Align2, Button, CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui, Window};
 use egui_extras::{Column, TableBuilder};
 use regex::Regex;
 use reqwest::{Client, StatusCode};
@@ -45,6 +45,7 @@ pub struct ExtractUI {
     channels: Channels,
     error_log_open: bool,
     error_log_text: String,
+    search_filter: String,
     filter: FilterMenu,
     selection: (Option<usize>, Option<usize>),
     visible_links: Vec<String>,
@@ -56,6 +57,7 @@ impl ExtractUI {
     pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
         extract_ui.display_input_area(ui);
         extract_ui.display_output_area(ui);
+        extract_ui.display_footer(ctx);
         extract_ui.toasts.show(ctx);
     }
 
@@ -163,11 +165,12 @@ impl ExtractUI {
 
                 ui.label(format!("{}/{} extracted successfully", successful_links, total_links));
 
+                self.toasts = Toasts::new()
+                    .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
+                    .direction(TopDown);
 
                 if successful_links != total_links && !self.shown_toast {
-                    self.toasts = Toasts::new()
-                        .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
-                        .direction(TopDown);
+
 
                     self.toasts.add(Toast {
                         text: "Error extracting".into(),
@@ -414,10 +417,25 @@ impl ExtractUI {
             }
         }
 
+        let selected_links = self.selected_links.clone();
+        for link in selected_links.iter() {
+            if !self.direct_links.contains(link) {
+                self.selected_links.remove(link);
+            }
+        }
+
         for (url_label, link) in url_labels {
             url_label.context_menu(|ui| {
                 if ui.button("Copy link").clicked() {
                     ui.output_mut(|output| output.copied_text = link.to_string());
+                    self.toasts.add(Toast {
+                        text: "Copied link".into(),
+                        kind: ToastKind::Info,
+                        options: ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true)
+                            .show_icon(true)
+                    });
                     ui.close_menu();
                 };
 
@@ -425,33 +443,123 @@ impl ExtractUI {
                     let selected_links: Vec<String> = self.selected_links.iter().map(|url| url.clone()).collect();
 
                     ui.output_mut(|output| output.copied_text = selected_links.join("\n"));
+                    self.toasts.add(Toast {
+                        text: "Copied selected links".into(),
+                        kind: ToastKind::Info,
+                        options: ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true)
+                            .show_icon(true)
+                    });
                     ui.close_menu();
                 };
 
                 if ui.button("Copy all links").clicked() {
                     let urls = self.direct_links.iter().map(|url| url.clone()).collect::<Vec<String>>();
                     ui.output_mut(|output| output.copied_text = urls.join("\n"));
+                    self.toasts.add(Toast {
+                        text: "Copied all links".into(),
+                        kind: ToastKind::Info,
+                        options: ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true)
+                            .show_icon(true)
+                    });
                     ui.close_menu();
                 };
 
                 ui.separator();
 
                 if ui.button("Open link in browser").clicked() {
-                    let _ = webbrowser::open(&link);
+                    match webbrowser::open(&link) {
+                        Ok(_) => {
+                            self.toasts.add(Toast {
+                                text: "Opened link".into(),
+                                kind: ToastKind::Success,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                        Err(error) => {
+                            self.toasts.add(Toast {
+                                text: format!("Failed to open link: {}", error).into(),
+                                kind: ToastKind::Info,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                    };
                     ui.close_menu();
                 };
 
                 if !self.selected_links.is_empty() && ui.button("Open selected links in browser").clicked() {
+                    let mut success = String::new();
                     for link in self.selected_links.iter() {
-                        let _ = webbrowser::open(link);
+                         if let Err(error) = webbrowser::open(link) {
+                             success = error.to_string()
+                         };
                     }
+
+                    match success.is_empty() {
+                        true => {
+                            self.toasts.add(Toast {
+                                text: "Opened links".into(),
+                                kind: ToastKind::Success,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                        false => {
+                            self.toasts.add(Toast {
+                                text: format!("Failed to open links: {}", success).into(),
+                                kind: ToastKind::Info,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                    };
+
                     ui.close_menu();
                 };
 
                 if ui.button("Open all links in browser").clicked() {
-                    for url in self.direct_links.iter() {
-                        let _ = webbrowser::open(url);
+                    let mut success = String::new();
+                    for link in self.direct_links.iter() {
+                        if let Err(error) = webbrowser::open(link) {
+                            success = error.to_string()
+                        };
                     }
+
+                    match success.is_empty() {
+                        true => {
+                            self.toasts.add(Toast {
+                                text: "Opened links".into(),
+                                kind: ToastKind::Success,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                        false => {
+                            self.toasts.add(Toast {
+                                text: format!("Failed to open links: {}", success).into(),
+                                kind: ToastKind::Info,
+                                options: ToastOptions::default()
+                                    .duration_in_seconds(5.0)
+                                    .show_progress(true)
+                                    .show_icon(true)
+                            });
+                        }
+                    };
                     ui.close_menu();
                 };
 
@@ -459,11 +567,25 @@ impl ExtractUI {
                     ui.separator();
                     if ui.button("Deselect all links").clicked() {
                         self.selected_links = HashSet::new();
+                        self.toasts.add(Toast {
+                            text: "Deselected links".into(),
+                            kind: ToastKind::Info,
+                            options: ToastOptions::default()
+                                .duration_in_seconds(5.0)
+                                .show_progress(true)
+                                .show_icon(true)
+                        });
                         ui.close_menu();
                     }
                 }
             });
         }
+    }
+
+    fn display_footer(&mut self, ctx: &Context) {
+        TopBottomPanel::bottom("Information").show(ctx, |ui| {
+            ui.label(format!("Selected {}/{} links", self.selected_links.len(), self.direct_links.len()));
+        });
     }
 }
 
