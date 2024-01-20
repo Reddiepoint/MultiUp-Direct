@@ -55,8 +55,8 @@ pub struct ExtractUI {
 impl ExtractUI {
     pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
         extract_ui.display_input_area(ui);
-        extract_ui.display_output_area(ui);
         extract_ui.display_footer(ctx);
+        extract_ui.display_output_area(ui);
         extract_ui.toasts.show(ctx);
     }
 
@@ -197,19 +197,19 @@ impl ExtractUI {
                                         Ok(_) => {
                                             for link in project.download_links.as_ref().unwrap() {
                                                 if link.status.as_ref().is_none() {
-                                                    errors = format!("{}\n{} - {}", errors, &link.original_link, "Unknown");
+                                                    errors = format!("{}\n\n{} - {}", errors, &link.original_link, "Unknown");
                                                 } else if let Err(error) = link.status.as_ref().unwrap() {
-                                                    errors = format!("{}\n{} - {:?}", errors, &link.original_link, error);
+                                                    errors = format!("{}\n\n{} - {:?}", errors, &link.original_link, error);
                                                 }
                                             }
                                         }
                                         Err(error) => {
-                                            errors = format!("{}\n{} - {:?}", errors, &project.original_link, error);
+                                            errors = format!("{}\n\n{} - {:?}", errors, &project.original_link, error);
                                         }
                                     }
                                 }
                                 None => {
-                                    errors = format!("{}\n{} - {}", errors, &project.original_link, "Unknown");
+                                    errors = format!("{}\n\n{} - {}", errors, &project.original_link, "Unknown");
                                 }
                             }
                         }
@@ -219,13 +219,13 @@ impl ExtractUI {
                                     match status {
                                         Ok(_) => {},
                                         Err(error) => {
-                                            errors = format!("{}\n{} - {:?}", errors, &download.original_link, error);
+                                            errors = format!("{}\n\n{} - {:?}", errors, &download.original_link, error);
                                         }
                                     }
 
                                 },
                                 None => {
-                                    errors = format!("{}\n{} - {}", errors, &download.original_link, "Unknown");
+                                    errors = format!("{}\n\n{} - {}", errors, &download.original_link, "Unknown");
                                 }
                             }
                         }
@@ -239,12 +239,16 @@ impl ExtractUI {
 
     pub fn display_error_log(&mut self, ctx: &Context) {
         Window::new("Error Log")
+            .default_width(200.0)
             .open(&mut self.error_log_open)
             .show(ctx, |ui| {
-                ScrollArea::vertical().id_source("Error Log").min_scrolled_height(ui.available_height()).show(ui, |ui| {
-                    let mut error = self.error_log_text.clone();
-                    ui.add(TextEdit::multiline(&mut error));
-                });
+                ScrollArea::vertical()
+                    .id_source("Error Log")
+                    .min_scrolled_height(ui.available_height())
+                    .show(ui, |ui| {
+                        let mut error = self.error_log_text.clone();
+                        ui.add(TextEdit::multiline(&mut error).desired_width(ui.available_width()));
+                    });
             });
     }
 
@@ -268,7 +272,10 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.set_height(height);
             let output_box_width = 0.80 * ui.available_width();
-            ScrollArea::vertical().id_source("Direct Links Output").show(ui, |ui| {
+            ScrollArea::vertical()
+                .id_source("Direct Links Output")
+                .max_height(ui.available_height() - 20.0)
+                .show(ui, |ui| {
                 ui.vertical(|ui| {
                     for link in &self.completed_links {
                         match link {
@@ -914,11 +921,10 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
 const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> DownloadLink {
     let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
-    let download_link = process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await;
     return if recheck_validity {
         recheck_validity_api(mirror_link, download_link, cancel_receiver).await
     } else {
-        download_link
+        process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await
     }
 }
 
@@ -933,10 +939,18 @@ async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLi
     params.insert("link", mirror_link);
     let information = match client.post("https://multiup.io/api/check-file")
         .form(&params)
-        .send().await.unwrap().json::<MultiUpLinkInformation>().await {
-        Ok(information) => information,
+        .send().await {
+        Ok(response) => {
+            match response.json::<MultiUpLinkInformation>().await {
+                Ok(information) => information,
+                Err(error) => {
+                    download_link.status = Some(Err(LinkError::APIError(error.to_string())));
+                    return download_link;
+                }
+            }
+        },
         Err(error) => {
-            download_link.status = Some(Err(LinkError::APIError(error.to_string())));
+            download_link.status = Some(Err(LinkError::Reqwest(error)));
             return download_link;
         }
     };
@@ -959,7 +973,9 @@ async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLi
             }
         }
     }
+    download_link.direct_links = Some(new_direct_links);
     download_link.link_information = Some(information);
+    download_link.status = Some(Ok(()));
     return download_link;
 }
 

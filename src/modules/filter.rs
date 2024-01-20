@@ -130,8 +130,10 @@ impl FilterMenu {
                 }
                 MultiUpLink::Download(download) => {
                     if let Some(Ok(_)) = &download.status {
-                        for link in download.direct_links.as_ref().unwrap() {
-                            hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+                        if let Some(download_links) = download.direct_links.as_ref() {
+                            for link in download_links {
+                                hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+                            }
                         }
                     }
                 }

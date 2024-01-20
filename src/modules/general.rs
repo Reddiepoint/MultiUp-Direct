@@ -22,7 +22,7 @@ pub async fn get_page_html(page_link: &str, client: &Client, cancel_receiver: Op
     };
 
     return match server_response.error_for_status() {
-        Ok(res) => Ok(res.text().await.unwrap().to_string()),
+        Ok(response) => Ok(response.text().await.unwrap().to_string()),
         Err(error) => {
             // Repeat if error is not 404
             if error.status().unwrap() != StatusCode::NOT_FOUND {
