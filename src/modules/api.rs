@@ -4,30 +4,6 @@ use reqwest::Client;
 use serde::Deserialize;
 use crate::modules::links::{DirectLink, DownloadLink, LinkError};
 
-#[derive(Deserialize)]
-pub struct FastestServer {
-    pub error: String,
-    pub server: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MultiUpUploadResponse {
-    pub files: Vec<UploadedFileDetails>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UploadedFileDetails {
-    pub name: Option<String>,
-    pub hash: Option<String>,
-    pub size: Option<u64>,
-    #[serde(rename = "type")]
-    pub file_type: Option<String>,
-    pub url: Option<String>,
-    pub sid: Option<String>,
-    pub user: Option<String>,
-    pub delete_url: Option<String>,
-    pub delete_type: Option<String>,
-}
 
 /// Represents information about a MultiUp link from the MultiUp API.
 /// Contains details such as the request status, file name, size (in bytes), upload and download dates,
@@ -113,4 +89,29 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
     download_link.link_information = Some(information);
     download_link.status = Some(Ok(()));
     download_link
+}
+
+#[derive(Deserialize)]
+pub struct FastestServer {
+    pub error: String,
+    pub server: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MultiUpUploadResponse {
+    pub files: Vec<UploadedFileDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UploadedFileDetails {
+    pub name: Option<String>,
+    pub hash: Option<String>,
+    pub size: Option<u64>,
+    #[serde(rename = "type")]
+    pub file_type: Option<String>,
+    pub url: Option<String>,
+    pub sid: Option<String>,
+    pub user: Option<String>,
+    pub delete_url: Option<String>,
+    pub delete_type: Option<String>,
 }
