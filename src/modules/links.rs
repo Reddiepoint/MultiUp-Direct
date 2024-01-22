@@ -136,40 +136,6 @@ impl DirectLink {
     }
 }
 
-/// Represents information about a MultiUp link from the MultiUp API.
-/// Contains details such as the request status, file name, size (in bytes), upload and download dates,
-/// number of downloads, description, and hosts.
-///
-/// When the API returns an error, only the error field will be returned. Otherwise, it will return
-/// `"success"`.
-#[derive(Debug, Deserialize)]
-pub struct MultiUpLinkInformation {
-    pub error: String,
-    pub file_name: Option<String>,
-    pub size: Option<String>,
-    pub date_upload: Option<String>,
-    pub time_upload: Option<u64>,
-    pub date_last_download: Option<String>,
-    pub number_downloads: Option<u64>,
-    pub description: Option<String>,
-    pub hosts: Option<HashMap<String, String>>,
-}
-
-impl MultiUpLinkInformation {
-    pub fn new_basic(file_name: String, size: String) -> Self {
-        Self {
-            error: "success".to_string(),
-            file_name: Some(file_name),
-            size: Some(size),
-            date_upload: None,
-            time_upload: None,
-            date_last_download: None,
-            number_downloads: None,
-            description: None,
-            hosts: None,
-        }
-    }
-}
 #[derive(Debug)]
 pub enum LinkError {
     APIError(String),

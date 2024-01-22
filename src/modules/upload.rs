@@ -5,31 +5,8 @@ use eframe::egui::TextBuffer;
 use futures::StreamExt;
 use serde::Deserialize;
 use tokio::process::Command;
+use crate::modules::api::FastestServer;
 
-#[derive(Deserialize)]
-pub struct FastestServer {
-    pub error: String,
-    pub server: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MultiUpUploadResponse {
-    pub files: Vec<UploadedFileDetails>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UploadedFileDetails {
-    pub name: Option<String>,
-    pub hash: Option<String>,
-    pub size: Option<u64>,
-    #[serde(rename = "type")]
-    pub file_type: Option<String>,
-    pub url: Option<String>,
-    pub sid: Option<String>,
-    pub user: Option<String>,
-    pub delete_url: Option<String>,
-    pub delete_type: Option<String>,
-}
 
 async fn get_fastest_server() -> Result<String, Box<dyn Error>> {
     let response = reqwest::get("https://multiup.io/api/get-fastest-server")

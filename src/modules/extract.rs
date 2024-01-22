@@ -13,10 +13,10 @@ use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
-use crate::modules::api::recheck_validity_api;
+use crate::modules::api::{MultiUpLinkInformation, recheck_validity_api};
 use crate::modules::filter::FilterMenu;
 use crate::modules::general::get_page_html;
-use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, MultiUpLinkInformation, ProjectLink};
+use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, ProjectLink};
 
 
 #[derive(Default)]
