@@ -601,19 +601,17 @@ impl ExtractUI {
                     ui.close_menu();
                 }
 
-                if !self.selected_links.is_empty() {
-                    if ui.button("Deselect all links").clicked() {
-                        self.selected_links = HashSet::new();
-                        self.toasts.add(Toast {
-                            text: "Deselected links".into(),
-                            kind: ToastKind::Info,
-                            options: ToastOptions::default()
-                                .duration_in_seconds(5.0)
-                                .show_progress(true)
-                                .show_icon(true)
-                        });
-                        ui.close_menu();
-                    }
+                if !self.selected_links.is_empty() && ui.button("Deselect all links").clicked() {
+                    self.selected_links = HashSet::new();
+                    self.toasts.add(Toast {
+                        text: "Deselected links".into(),
+                        kind: ToastKind::Info,
+                        options: ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true)
+                            .show_icon(true)
+                    });
+                    ui.close_menu();
                 }
             });
         }
@@ -639,7 +637,7 @@ async fn extract_direct_links(input_text: &str, recheck_validity: bool, cancel_r
     let completed_links = get_direct_links(processed_links, recheck_validity, cancel_receiver).await;
     let time_taken = time_now.elapsed();
     println!("{}", time_taken.as_secs_f32());
-    return completed_links;
+    completed_links
 }
 
 /// Detects MultiUp links in the given input text.
@@ -656,7 +654,7 @@ fn detect_links(input_text: &str) -> Vec<String> {
     }
 
     // Return detected links
-    return detected_links;
+    detected_links
 }
 
 async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bool>) -> Vec<MultiUpLink> {
@@ -697,7 +695,7 @@ async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bo
         processed_links.append(&mut vec![link.unwrap()])
     }
 
-    return processed_links;
+    processed_links
 }
 static DOWNLOAD_REGEX: OnceLock<Regex> = OnceLock::new();
 static MIRROR_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -921,7 +919,7 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
 const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> DownloadLink {
     let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
-    return if recheck_validity {
+    if recheck_validity {
         recheck_validity_api(mirror_link, download_link, cancel_receiver).await
     } else {
         process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await
@@ -976,7 +974,7 @@ async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLi
     download_link.direct_links = Some(new_direct_links);
     download_link.link_information = Some(information);
     download_link.status = Some(Ok(()));
-    return download_link;
+    download_link
 }
 
 async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>) -> DownloadLink {
@@ -1087,5 +1085,5 @@ fn calculate_row_heights(links: &HashSet<DownloadLink>, filter_menu: &FilterMenu
         heights.push(height);
     }
 
-    return heights;
+    heights
 }

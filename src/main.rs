@@ -1,12 +1,9 @@
 // #![windows_subsystem = "windows"]
+mod modules;
 
 use eframe::egui::ViewportBuilder;
-
 use crate::modules::main::MultiUpDirect;
 
-//mod constants;
-//mod functions;
-mod modules;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
