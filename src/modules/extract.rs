@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use async_recursion::async_recursion;
 use eframe::egui::{Align2, Button, CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui, Window};
 use egui_extras::{Column, TableBuilder};
@@ -8,7 +8,7 @@ use scraper::{ElementRef, Selector};
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::Instant;
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
@@ -171,8 +171,6 @@ impl ExtractUI {
                     .direction(TopDown);
 
                 if successful_links != total_links && !self.shown_toast {
-
-
                     self.toasts.add(Toast {
                         text: "Error extracting".into(),
                         kind: ToastKind::Error,
@@ -223,7 +221,6 @@ impl ExtractUI {
                                             errors = format!("{}\n\n{} - {:?}", errors, &download.original_link, error);
                                         }
                                     }
-
                                 },
                                 None => {
                                     errors = format!("{}\n\n{} - {}", errors, &download.original_link, "Unknown");
@@ -277,158 +274,156 @@ impl ExtractUI {
                 .id_source("Direct Links Output")
                 .max_height(ui.available_height() - 20.0)
                 .show(ui, |ui| {
-                ui.vertical(|ui| {
-                    for link in &self.completed_links {
-                        match link {
-                            MultiUpLink::Project(project) => {
-                                if let Some(Ok(())) = project.status {
-                                    for link in project.download_links.as_ref().unwrap() {
-                                        let filtered_links = self.filter.filter_links(link);
-                                        for link in filtered_links {
-                                            self.direct_links.insert(link);
+                    ui.vertical(|ui| {
+                        for link in &self.completed_links {
+                            match link {
+                                MultiUpLink::Project(project) => {
+                                    if let Some(Ok(())) = project.status {
+                                        for link in project.download_links.as_ref().unwrap() {
+                                            let filtered_links = self.filter.filter_links(link);
+                                            for link in filtered_links {
+                                                self.direct_links.insert(link);
+                                            }
                                         }
-                                    }
-                                    CollapsingHeader::new(&project.name)
-                                        .id_source(&project.link_id)
-                                        .default_open(true)
-                                        .show(ui, |ui| {
-                                            TableBuilder::new(ui)
-                                                .column(Column::exact(output_box_width))
-                                                .vscroll(false)
-                                                .body(|body| {
-                                                    let heights = calculate_row_heights(project.download_links.as_ref().unwrap(), &self.filter);
-                                                    let download_links: Vec<&DownloadLink> = project.download_links.as_ref().unwrap().iter().collect();
+                                        CollapsingHeader::new(&project.name)
+                                            .id_source(&project.link_id)
+                                            .default_open(true)
+                                            .show(ui, |ui| {
+                                                TableBuilder::new(ui)
+                                                    .column(Column::exact(output_box_width))
+                                                    .vscroll(false)
+                                                    .body(|body| {
+                                                        let heights = calculate_row_heights(project.download_links.as_ref().unwrap(), &self.filter);
+                                                        let download_links: Vec<&DownloadLink> = project.download_links.as_ref().unwrap().iter().collect();
 
-                                                    body.heterogeneous_rows(heights.into_iter(), |mut row| {
-                                                        let row_index = row.index();
-                                                        let link = download_links[row_index];
-                                                        let mut searched = false;
-                                                        if let Some(information) = &link.link_information {
-                                                            let mut display_information = String::new();
-                                                            if let Some(file_name) = &information.file_name {
-                                                                display_information += file_name;
-                                                                searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
-                                                            }
-                                                            if let Some(description) = &information.description {
-                                                                display_information += format!(" - {}", description).as_str();
-                                                            }
-                                                            if let Some(file_size) = &information.size {
-                                                                display_information += format!(" ({} bytes)", file_size).as_str();
-                                                            }
-                                                            if let Some(date_upload) = &information.date_upload {
-                                                                display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                                            }
-                                                            if searched {
-                                                                row.col(|ui| {
-                                                                    CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
-                                                                        let filtered_links = self.filter.filter_links(link);
-                                                                        for link in &filtered_links {
-                                                                            self.visible_links.push(link.clone());
-                                                                            let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                                            if url_label.hovered() || self.selected_links.contains(link) {
-                                                                                url_label.clone().highlight();
-                                                                            }
-                                                                            if url_label.clicked() {
-                                                                                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                                if control_is_down {
-                                                                                    if !self.selected_links.remove(link.as_str()) {
-                                                                                        self.selected_links.insert(link.clone());
-                                                                                    };
-                                                                                    self.selection = (None, None);
-                                                                                } else if shift_is_down {
-                                                                                    if self.selection.0.is_none() {
-                                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                    } else {
-                                                                                        self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                    };
-                                                                                } else {
-                                                                                    self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                        body.heterogeneous_rows(heights.into_iter(), |mut row| {
+                                                            let row_index = row.index();
+                                                            let link = download_links[row_index];
+                                                            let mut searched = false;
+                                                            if let Some(information) = &link.link_information {
+                                                                let mut display_information = String::new();
+                                                                if let Some(file_name) = &information.file_name {
+                                                                    display_information += file_name;
+                                                                    searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
+                                                                }
+                                                                if let Some(description) = &information.description {
+                                                                    display_information += format!(" - {}", description).as_str();
+                                                                }
+                                                                if let Some(file_size) = &information.size {
+                                                                    display_information += format!(" ({} bytes)", file_size).as_str();
+                                                                }
+                                                                if let Some(date_upload) = &information.date_upload {
+                                                                    display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                                                }
+                                                                if searched {
+                                                                    row.col(|ui| {
+                                                                        CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
+                                                                            let filtered_links = self.filter.filter_links(link);
+                                                                            for link in &filtered_links {
+                                                                                self.visible_links.push(link.clone());
+                                                                                let url_label = ui.add(Label::new(link).sense(Sense::click()));
+                                                                                if url_label.hovered() || self.selected_links.contains(link) {
+                                                                                    url_label.clone().highlight();
                                                                                 }
+                                                                                if url_label.clicked() {
+                                                                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                                                                    if control_is_down {
+                                                                                        if !self.selected_links.remove(link.as_str()) {
+                                                                                            self.selected_links.insert(link.clone());
+                                                                                        };
+                                                                                        self.selection = (None, None);
+                                                                                    } else if shift_is_down {
+                                                                                        if self.selection.0.is_none() {
+                                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                        } else {
+                                                                                            self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                        };
+                                                                                    } else {
+                                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                                    }
+                                                                                }
+
+                                                                                url_labels.push((url_label, link.clone()));
                                                                             }
-
-                                                                            url_labels.push((url_label, link.clone()));
-                                                                        }
+                                                                        });
                                                                     });
-                                                                });
+                                                                }
                                                             }
-                                                        }
+                                                        });
                                                     });
-                                                });
-                                        });
-                                }
-                            },
-                            MultiUpLink::Download(download) => {
-                                if let Some(Ok(())) = download.status {
-                                    let information = download.link_information.as_ref().unwrap();
-                                    let mut display_information = String::new();
-                                    let mut searched = false;
-                                    if let Some(file_name) = &information.file_name {
-                                        display_information += file_name;
-                                        searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
+                                            });
                                     }
-                                    if let Some(description) = &information.description {
-                                        display_information += format!(" - {}", description).as_str();
-                                    }
-                                    if let Some(file_size) = &information.size {
-                                        display_information += format!(" ({} bytes)", file_size).as_str();
-                                    }
-                                    if let Some(date_upload) = &information.date_upload {
-                                        display_information += format!(" | Uploaded on {}", date_upload).as_str();
-                                    }
+                                },
+                                MultiUpLink::Download(download) => {
+                                    if let Some(Ok(())) = download.status {
+                                        let information = download.link_information.as_ref().unwrap();
+                                        let mut display_information = String::new();
+                                        let mut searched = false;
+                                        if let Some(file_name) = &information.file_name {
+                                            display_information += file_name;
+                                            searched = file_name.to_lowercase().contains(&self.search_filter.to_lowercase());
+                                        }
+                                        if let Some(description) = &information.description {
+                                            display_information += format!(" - {}", description).as_str();
+                                        }
+                                        if let Some(file_size) = &information.size {
+                                            display_information += format!(" ({} bytes)", file_size).as_str();
+                                        }
+                                        if let Some(date_upload) = &information.date_upload {
+                                            display_information += format!(" | Uploaded on {}", date_upload).as_str();
+                                        }
 
-                                    let filtered_links = self.filter.filter_links(download);
-                                    let number_of_direct_links = filtered_links.len() as f32;
-                                    let height = 20.0 + number_of_direct_links * 20.0;
-                                    if searched {
-                                        ui.push_id(&download.link_id, |ui| {
-                                            TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
-                                                body.rows(height, 1, |mut row| {
-                                                    // let row_index = row.index();
-                                                    row.col(|ui| {
-                                                        CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
-                                                            for link in &filtered_links {
-                                                                self.visible_links.push(link.clone());
-                                                                let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                                if url_label.hovered() || self.selected_links.contains(link) {
-                                                                    url_label.clone().highlight();
-                                                                }
-                                                                if url_label.clicked() {
-                                                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                    if control_is_down {
-                                                                        if !self.selected_links.remove(link.as_str()) {
-                                                                            self.selected_links.insert(link.clone());
-                                                                        };
-                                                                        self.selection = (None, None);
-                                                                    } else if shift_is_down {
-
-                                                                        if self.selection.0.is_none() {
-                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                        } else {
-                                                                            self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                        };
-                                                                    } else {
-                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                        let filtered_links = self.filter.filter_links(download);
+                                        let number_of_direct_links = filtered_links.len() as f32;
+                                        let height = 20.0 + number_of_direct_links * 20.0;
+                                        if searched {
+                                            ui.push_id(&download.link_id, |ui| {
+                                                TableBuilder::new(ui).column(Column::exact(output_box_width)).body(|body| {
+                                                    body.rows(height, 1, |mut row| {
+                                                        // let row_index = row.index();
+                                                        row.col(|ui| {
+                                                            CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
+                                                                for link in &filtered_links {
+                                                                    self.visible_links.push(link.clone());
+                                                                    let url_label = ui.add(Label::new(link).sense(Sense::click()));
+                                                                    if url_label.hovered() || self.selected_links.contains(link) {
+                                                                        url_label.clone().highlight();
                                                                     }
-                                                                }
+                                                                    if url_label.clicked() {
+                                                                        let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                                                                        if control_is_down {
+                                                                            if !self.selected_links.remove(link.as_str()) {
+                                                                                self.selected_links.insert(link.clone());
+                                                                            };
+                                                                            self.selection = (None, None);
+                                                                        } else if shift_is_down {
+                                                                            if self.selection.0.is_none() {
+                                                                                self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                            } else {
+                                                                                self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                            };
+                                                                        } else {
+                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
+                                                                        }
+                                                                    }
 
-                                                                url_labels.push((url_label, link.clone()))
-                                                            }
+                                                                    url_labels.push((url_label, link.clone()))
+                                                                }
+                                                            });
                                                         });
                                                     });
                                                 });
                                             });
-                                        });
-                                        for link in filtered_links {
-                                            self.direct_links.insert(link);
+                                            for link in filtered_links {
+                                                self.direct_links.insert(link);
+                                            }
                                         }
                                     }
-
                                 }
-                            }
-                        };
-                    }
+                            };
+                        }
+                    });
                 });
-            });
 
             self.filter.show(ui, &self.completed_links);
         });
@@ -529,9 +524,9 @@ impl ExtractUI {
                 if !self.selected_links.is_empty() && ui.button("Open selected links in browser").clicked() {
                     let mut success = String::new();
                     for link in self.selected_links.iter() {
-                         if let Err(error) = webbrowser::open(link) {
-                             success = error.to_string()
-                         };
+                        if let Err(error) = webbrowser::open(link) {
+                            success = error.to_string()
+                        };
                     }
 
                     match success.is_empty() {
@@ -679,12 +674,12 @@ async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bo
             });
             project_processing_tasks.push(processing_task);
         } else if mirror_regex.is_match(&link) {
-            let download_link= MultiUpLink::Download(process_non_project_link(&link.clone(), &mirror_regex));
+            let download_link = MultiUpLink::Download(process_non_project_link(&link.clone(), &mirror_regex));
             if !processed_links.contains(&download_link) {
                 processed_links.push(download_link);
             }
         } else if download_regex.is_match(&link) {
-            let download_link= MultiUpLink::Download(process_non_project_link(&link.clone(), &download_regex));
+            let download_link = MultiUpLink::Download(process_non_project_link(&link.clone(), &download_regex));
             if !processed_links.contains(&download_link) {
                 processed_links.push(download_link);
             }
@@ -698,6 +693,7 @@ async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bo
 
     processed_links
 }
+
 static DOWNLOAD_REGEX: OnceLock<Regex> = OnceLock::new();
 static MIRROR_REGEX: OnceLock<Regex> = OnceLock::new();
 static PROJECT_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -757,18 +753,16 @@ async fn process_project_link(project_link: &str, cancel_receiver: Receiver<bool
             project_link.status = Some(Err(error));
             return MultiUpLink::Project(project_link);
         }
-
     };
     // let download_links = get_project_download_links(project_link).await?;
     let mut processed_links: HashSet<DownloadLink> = HashSet::with_capacity(download_links.len());
 
     for link in download_links {
         if mirror_regex.is_match(&link) {
-            let download_link= process_non_project_link(&link.clone(), mirror_regex);
+            let download_link = process_non_project_link(&link.clone(), mirror_regex);
             processed_links.insert(download_link);
-
         } else if download_regex.is_match(&link) {
-            let download_link= process_non_project_link(&link.clone(), download_regex);
+            let download_link = process_non_project_link(&link.clone(), download_regex);
             processed_links.insert(download_link);
         }
     }
@@ -781,6 +775,7 @@ async fn process_project_link(project_link: &str, cancel_receiver: Receiver<bool
 
 static PROJECT_DOWNLOAD_LINKS_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static PROJECT_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
+
 /// Retrieves information about a project given a project link.
 ///
 /// Parses the project link for an ID, parses the page title for a name and extracts download links.
@@ -918,6 +913,7 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
 }
 
 const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
+
 async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> DownloadLink {
     let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
     if recheck_validity {
@@ -946,6 +942,7 @@ async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLin
 static MIRROR_HOSTS_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static MIRROR_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
+
 /// Retrieves
 #[async_recursion]
 async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<bool>) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
@@ -967,10 +964,9 @@ async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<boo
 
     let mirror_hosts_selector = MIRROR_HOSTS_SELECTOR.get_or_init(|| Selector::parse(r#"a.host[namehost], button.host[namehost]"#).unwrap());
     for button in parsed_page.select(mirror_hosts_selector) {
-        if let Some(direct_link) =  get_direct_link_from_button(button) {
+        if let Some(direct_link) = get_direct_link_from_button(button) {
             direct_links.insert(direct_link);
         };
-
     }
 
     if direct_links.is_empty() {
