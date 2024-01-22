@@ -1,11 +1,7 @@
-use reqwest::{Client, multipart, Response};
+use reqwest::{Client, multipart};
 use std::error::Error;
-use std::process::Stdio;
 use eframe::egui::TextBuffer;
-use futures::StreamExt;
-use serde::Deserialize;
-use tokio::process::Command;
-use crate::modules::api::FastestServer;
+use crate::modules::api::{FastestServer, MultiUpUploadResponse};
 
 
 async fn get_fastest_server() -> Result<String, Box<dyn Error>> {
