@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
+use std::error::Error;
 use crossbeam_channel::{Receiver, TryRecvError};
 use reqwest::Client;
 use serde::Deserialize;
@@ -95,6 +96,18 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
 pub struct FastestServer {
     pub error: String,
     pub server: Option<String>,
+}
+
+pub async fn get_fastest_server() -> Result<String, Box<dyn Error>> {
+    let response = reqwest::get("https://multiup.io/api/get-fastest-server")
+        .await?
+        .json::<FastestServer>()
+        .await?;
+
+    match response.server {
+        Some(server) => Ok(server),
+        None => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "No server found")))
+    }
 }
 
 #[derive(Debug, Deserialize)]

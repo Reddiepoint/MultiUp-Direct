@@ -2,6 +2,7 @@ use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
 use crate::modules::extract::ExtractUI;
 use crate::modules::help::HelpUI;
+use crate::modules::upload::UploadUI;
 
 
 /// A struct representing the application UI.
@@ -11,6 +12,7 @@ use crate::modules::help::HelpUI;
 pub struct MultiUpDirect {
     tab_bar: TabBar,
     extract_ui: ExtractUI,
+    upload_ui: UploadUI,
     help_ui: HelpUI,
 }
 
@@ -50,7 +52,6 @@ impl MultiUpDirect {
                     ui.close_menu();
                 };
 
-
                 ui.separator();
 
                 if ui.button("Check for updates").clicked() {
@@ -75,12 +76,12 @@ impl MultiUpDirect {
         CentralPanel::default().show(ctx, |ui| {
             match &self.tab_bar {
                 TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
+                TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui)
             }
 
             ExtractUI::display_error_log(&mut self.extract_ui, ctx);
-            self.help_ui.show_help(ctx);
-            self.help_ui.show_update(ctx);
-
+            HelpUI::show_help(ctx, &mut self.help_ui);
+            HelpUI::show_update(ctx, &mut self.help_ui);
         });
     }
 }
@@ -92,4 +93,5 @@ impl MultiUpDirect {
 enum TabBar {
     #[default]
     Extract,
+    Upload
 }

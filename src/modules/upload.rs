@@ -1,21 +1,18 @@
 use reqwest::{Client, multipart};
 use std::error::Error;
-use eframe::egui::TextBuffer;
-use crate::modules::api::{FastestServer, MultiUpUploadResponse};
+use eframe::egui::{Context, TextBuffer, Ui};
+use crate::modules::api::{get_fastest_server, MultiUpUploadResponse};
 
-
-async fn get_fastest_server() -> Result<String, Box<dyn Error>> {
-    let response = reqwest::get("https://multiup.io/api/get-fastest-server")
-        .await?
-        .json::<FastestServer>()
-        .await?;
-
-    match response.server {
-        Some(server) => Ok(server),
-        None => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "No server found")))
-    }
+#[derive(Default)]
+pub struct UploadUI {
+    
 }
 
+impl UploadUI {
+    pub fn display(ctx: &Context, ui: &mut Ui, upload_ui: &mut UploadUI) {
+        
+    }
+}
 
 #[tokio::test]
 async fn test_download_and_upload_file_with_reqwest() {

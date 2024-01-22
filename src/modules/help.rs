@@ -62,17 +62,17 @@ impl HelpUI {
         self.update_receiver = Some(rx);
     }
 
-    pub fn show_help(&mut self, ctx: &Context) {
-        Window::new("Help").open(&mut self.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
+    pub fn show_help(ctx: &Context, help_ui: &mut HelpUI) {
+        Window::new("Help").open(&mut help_ui.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
             ui.label(HELP_MESSAGE);
         }));
     }
 
-    pub fn show_update(&mut self, ctx: &Context) {
-        Window::new("Updates").open(&mut self.show_update).show(ctx, |ui| {
+    pub fn show_update(ctx: &Context, help_ui: &mut HelpUI) {
+        Window::new("Updates").open(&mut help_ui.show_update).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading({
-                    match self.update_status {
+                    match help_ui.update_status {
                         UpdateStatus::Unchecked => "Checking for updates...",
                         UpdateStatus::Checking => "Checking for updates...",
                         UpdateStatus::Outdated => "There is an update available!",
@@ -80,7 +80,7 @@ impl HelpUI {
                     }
                 });
 
-                if let UpdateStatus::Checking = self.update_status {
+                if let UpdateStatus::Checking = help_ui.update_status {
                     ui.spinner();
                 };
             });
@@ -88,34 +88,34 @@ impl HelpUI {
 
             ui.hyperlink_to("Homepage", HOMEPAGE);
             let mut changelog_text = String::new();
-            for change in self.latest_changelog.iter() {
+            for change in help_ui.latest_changelog.iter() {
                 changelog_text.push_str(&format!("- {}\n", change));
             };
 
             if !changelog_text.is_empty() {
                 ui.separator();
-                ui.heading(format!("What's new in v{}", self.latest_version));
+                ui.heading(format!("What's new in v{}", help_ui.latest_version));
                 ui.label(changelog_text);
             }
 
-            match self.update_status {
+            match help_ui.update_status {
                 UpdateStatus::Unchecked => {
-                    HelpUI::is_updated(self.update_sender.clone().unwrap());
-                    self.update_status = UpdateStatus::Checking;
+                    HelpUI::is_updated(help_ui.update_sender.clone().unwrap());
+                    help_ui.update_status = UpdateStatus::Checking;
                 }
                 UpdateStatus::Outdated => {}
                 UpdateStatus::Updated => {}
                 UpdateStatus::Checking => {
-                    if let Ok((latest_version, changelog)) = self.update_receiver.clone().unwrap().try_recv() {
+                    if let Ok((latest_version, changelog)) = help_ui.update_receiver.clone().unwrap().try_recv() {
                         let app_version: Vec<u32> = VERSION.split('.').map(|s| s.parse().unwrap()).collect();
                         let homepage_version: Vec<u32> = latest_version.split('.').map(|s| s.parse().unwrap()).collect();
                         match app_version.cmp(&homepage_version) {
-                            Ordering::Less => self.update_status = UpdateStatus::Outdated,
-                            Ordering::Equal => self.update_status = UpdateStatus::Updated,
-                            Ordering::Greater => self.update_status = UpdateStatus::Updated,
+                            Ordering::Less => help_ui.update_status = UpdateStatus::Outdated,
+                            Ordering::Equal => help_ui.update_status = UpdateStatus::Updated,
+                            Ordering::Greater => help_ui.update_status = UpdateStatus::Updated,
                         };
-                        self.latest_changelog = changelog;
-                        self.latest_version = latest_version;
+                        help_ui.latest_changelog = changelog;
+                        help_ui.latest_version = latest_version;
                     }
                 }
             };
