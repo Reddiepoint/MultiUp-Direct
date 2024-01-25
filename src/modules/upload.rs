@@ -83,75 +83,6 @@ impl UploadUI {
         upload_ui.toasts.show(ctx);
     }
 
-    fn display_login_window(&mut self, ctx: &Context) {
-        let mut open = self.show_login_window;
-        Window::new("Login").open(&mut self.show_login_window).show(ctx, |ui| {
-            ui.heading("Please log in or enter your user ID");
-
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Username:");
-                        ui.add(TextEdit::singleline(&mut self.login_details.username)
-                            .desired_width(ui.available_width() / 2.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Password:");
-                        ui.add(TextEdit::singleline(&mut self.login_details.password)
-                            .password(true)
-                            .desired_width(ui.available_width() / 2.0));
-                    });
-
-                    if ui.button("Login").clicked() {
-                        let (login_sender, login_receiver) = crossbeam_channel::unbounded();
-                        self.channels = Channels::new(Some(login_receiver), self.channels.upload.clone());
-
-                        let rt = Runtime::new().unwrap();
-                        let login_details = self.login_details.clone();
-                        thread::spawn(move || {
-                            rt.block_on(async {
-                                let login_result = login_details.login().await;
-
-                                let _ = login_sender.send(login_result);
-                            });
-                        });
-                    }
-                });
-
-                ui.separator();
-
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("User ID:");
-                        ui.text_edit_singleline(&mut self.login_details.user_id);
-                    });
-                    if ui.button("Login").clicked() {
-                        let id = match self.login_details.user_id.trim().parse::<u64>() {
-                            Ok(id) => Some(id),
-                            Err(_) => {
-                                self.toasts.add(Toast {
-                                    text: "Invalid ID".into(),
-                                    kind: ToastKind::Error,
-                                    options: ToastOptions::default()
-                                        .duration_in_seconds(5.0)
-                                        .show_progress(true)
-                                        .show_icon(true)
-                                });
-
-                                None
-                            }
-                        };
-                        self.login_response.user = id;
-                        // self.show_login_window = false;
-                        open = false;
-                    }
-                });
-            });
-        });
-        if !open {
-            self.show_login_window = false;
-        }
-    }
     fn display_login(&mut self, ui: &mut Ui) {
         if let Some(receiver) = &self.channels.login {
             if let Ok(response) = receiver.try_recv() {
@@ -224,6 +155,75 @@ impl UploadUI {
         });
     }
 
+    fn display_login_window(&mut self, ctx: &Context) {
+        let mut open = self.show_login_window;
+        Window::new("Login").open(&mut self.show_login_window).show(ctx, |ui| {
+            ui.heading("Please log in or enter your user ID");
+
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Username:");
+                        ui.add(TextEdit::singleline(&mut self.login_details.username)
+                            .desired_width(ui.available_width() / 2.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Password:");
+                        ui.add(TextEdit::singleline(&mut self.login_details.password)
+                            .password(true)
+                            .desired_width(ui.available_width() / 2.0));
+                    });
+
+                    if ui.button("Login").clicked() {
+                        let (login_sender, login_receiver) = crossbeam_channel::unbounded();
+                        self.channels = Channels::new(Some(login_receiver), self.channels.upload.clone());
+
+                        let rt = Runtime::new().unwrap();
+                        let login_details = self.login_details.clone();
+                        thread::spawn(move || {
+                            rt.block_on(async {
+                                let login_result = login_details.login().await;
+
+                                let _ = login_sender.send(login_result);
+                            });
+                        });
+                    }
+                });
+
+                ui.separator();
+
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("User ID:");
+                        ui.text_edit_singleline(&mut self.login_details.user_id);
+                    });
+                    if ui.button("Login").clicked() {
+                        let id = match self.login_details.user_id.trim().parse::<u64>() {
+                            Ok(id) => Some(id),
+                            Err(_) => {
+                                self.toasts.add(Toast {
+                                    text: "Invalid ID".into(),
+                                    kind: ToastKind::Error,
+                                    options: ToastOptions::default()
+                                        .duration_in_seconds(5.0)
+                                        .show_progress(true)
+                                        .show_icon(true)
+                                });
+
+                                None
+                            }
+                        };
+                        self.login_response.user = id;
+                        // self.show_login_window = false;
+                        open = false;
+                    }
+                });
+            });
+        });
+        if !open {
+            self.show_login_window = false;
+        }
+    }
     fn display_upload_types(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.label("Choose upload type:");
