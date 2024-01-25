@@ -1,9 +1,18 @@
 use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
+use crate::modules::debrid::DebridUI;
 use crate::modules::extract::ExtractUI;
 use crate::modules::help::HelpUI;
 use crate::modules::upload::UploadUI;
 
+/// Represents a bar containing tabs for each function.
+#[derive(Default, PartialEq)]
+enum TabBar {
+    #[default]
+    Extract,
+    Debrid,
+    Upload
+}
 
 /// A struct representing the application UI.
 /// 
@@ -12,6 +21,7 @@ use crate::modules::upload::UploadUI;
 pub struct MultiUpDirect {
     tab_bar: TabBar,
     extract_ui: ExtractUI,
+    debrid_ui: DebridUI,
     upload_ui: UploadUI,
     help_ui: HelpUI,
 }
@@ -33,6 +43,7 @@ impl MultiUpDirect {
             ui.horizontal(|ui| {
                 // Add tabs for each function
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
+                ui.selectable_value(&mut self.tab_bar, TabBar::Debrid, "Debrid");
                 ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
 
                 // Menu bar/toolbar elements
@@ -77,6 +88,7 @@ impl MultiUpDirect {
         CentralPanel::default().show(ctx, |ui| {
             match &self.tab_bar {
                 TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
+                TabBar::Debrid => DebridUI::display(ctx, ui, &mut self.debrid_ui),
                 TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui)
             }
 
@@ -89,10 +101,3 @@ impl MultiUpDirect {
 
 
 
-/// Represents a bar containing tabs for each function.
-#[derive(Default, PartialEq)]
-enum TabBar {
-    #[default]
-    Extract,
-    Upload
-}
