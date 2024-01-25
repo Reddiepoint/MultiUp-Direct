@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
-use serde::Deserialize;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
+use crate::modules::api::MultiUpLinkInformation;
 
 #[derive(Debug)]
 pub enum MultiUpLink {

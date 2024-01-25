@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use crossbeam_channel::{Receiver, TryRecvError};
-use reqwest::Client;
+use reqwest::{Client, multipart};
 use serde::Deserialize;
 use crate::modules::links::{DirectLink, DownloadLink, LinkError};
 
@@ -90,6 +90,45 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
     download_link.link_information = Some(information);
     download_link.status = Some(Ok(()));
     download_link
+}
+
+#[derive(Clone, Default)]
+pub struct Login {
+    pub username: String,
+    pub password: String,
+    pub user_id: String
+}
+
+impl Login {
+    pub async fn login(&self) -> Result<LoginResponse, LinkError> {
+        let client = Client::new();
+        let params = multipart::Form::new()
+            .text("username", self.username.clone())
+            .text("password", self.password.clone());
+        match client.post("https://multiup.io/api/login")
+            .multipart(params)
+            .send().await {
+            Ok(response) => {
+                match response.json::<LoginResponse>().await {
+                    Ok(login_response) => Ok(login_response),
+                    Err(error) => {
+                        Err(LinkError::APIError(error.to_string()))
+                    }
+                }
+            },
+            Err(error) => {
+                Err(LinkError::Reqwest(error))
+            }
+        }
+    }
+}
+#[derive(Default, Deserialize)]
+pub struct LoginResponse {
+    pub error: String,
+    pub login: Option<String>,
+    pub user: Option<u64>,
+    pub account_type: Option<String>,
+    pub premium_days_left: Option<String>
 }
 
 #[derive(Deserialize)]

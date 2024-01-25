@@ -33,6 +33,7 @@ impl MultiUpDirect {
             ui.horizontal(|ui| {
                 // Add tabs for each function
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
+                ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
 
                 // Menu bar/toolbar elements
                 self.menu_bar(ui);
