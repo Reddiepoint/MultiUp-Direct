@@ -160,6 +160,8 @@ pub async fn get_fastest_server() -> Result<String, LinkError> {
 #[derive(Debug, Deserialize)]
 pub struct MultiUpUploadResponse {
     pub files: Vec<UploadedFileDetails>,
+    #[serde(skip)]
+    pub project_hash: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

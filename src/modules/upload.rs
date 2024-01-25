@@ -74,7 +74,7 @@ impl UploadUI {
             .direction(TopDown);
 
         upload_ui.display_login(ui);
-        upload_ui.display_login_window(ctx, ui);
+        upload_ui.display_login_window(ctx);
         upload_ui.display_upload_types(ui);
         match upload_ui.upload_type {
             UploadType::Remote => upload_ui.display_remote_upload_ui(ui)
@@ -82,7 +82,7 @@ impl UploadUI {
         upload_ui.toasts.show(ctx);
     }
 
-    fn display_login_window(&mut self, ctx: &Context, ui: &mut Ui) {
+    fn display_login_window(&mut self, ctx: &Context) {
         let mut open = self.show_login_window;
         Window::new("Login").open(&mut self.show_login_window).show(ctx, |ui| {
             ui.heading("Please log in or enter your user ID");
@@ -121,7 +121,7 @@ impl UploadUI {
 
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label("User ID");
+                        ui.label("User ID:");
                         ui.text_edit_singleline(&mut self.login_details.user_id);
                     });
                     if ui.button("Login").clicked() {
@@ -311,8 +311,13 @@ impl UploadUI {
                         } else {
                             None
                         };
-                        let response = stream_file(&urls, &file_names, login_response, remote_upload_settings_clone, project_hash).await;
-                        upload_sender.send(response).unwrap();
+                        let response = stream_file(&urls, &file_names, login_response, remote_upload_settings_clone, project_hash.clone()).await;
+                        if let Ok(mut response) = response {
+                            response.project_hash = project_hash;
+                            upload_sender.send(Ok(response)).unwrap();
+                        } else {
+                            upload_sender.send(response).unwrap();
+                        }
                     });
                 });
             }
@@ -340,13 +345,18 @@ impl UploadUI {
                             user: None,
                             delete_url: None,
                             delete_type: None
-                        }]
+                        }],
+                        project_hash: None
                     });
                     let mut multiup_links = vec![];
                     for file in response.files {
                         if let Some(url) = file.url {
                             multiup_links.push(url);
                         }
+                    }
+
+                    if let Some(hash) = response.project_hash {
+                        multiup_links.push(format!("https://multiup.io/en/project/{}", hash));
                     }
 
                     self.multiup_links = multiup_links;
