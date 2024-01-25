@@ -1,9 +1,11 @@
 use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
+use std::future::Future;
 use crossbeam_channel::{Receiver, TryRecvError};
 use reqwest::{Client, multipart};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use crate::modules::links::{DirectLink, DownloadLink, LinkError};
+use crate::modules::upload::RemoteUploadSettings;
 
 
 /// Represents information about a MultiUp link from the MultiUp API.
@@ -123,7 +125,7 @@ impl Login {
     }
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct LoginResponse {
     pub error: String,
     pub login: Option<String>,
@@ -173,3 +175,69 @@ pub struct UploadedFileDetails {
     pub delete_url: Option<String>,
     pub delete_type: Option<String>,
 }
+
+#[derive(Debug)]
+pub struct AddProject {
+    pub name: String,
+    pub password: Option<String>,
+    pub description: Option<String>,
+    pub user_id: Option<String>
+}
+
+impl AddProject {
+    pub fn new(name: String, password: Option<String>, description: Option<String>, user_id: Option<String>) -> Self {
+        Self { name, password, description, user_id }
+    }
+
+    pub async fn add_project(&self) -> Result<AddProjectResponse, LinkError> {
+        let client = Client::new();
+        // println!("{:?}", self);
+        let mut params = HashMap::new();
+        params.insert("name", self.name.clone());
+        if let Some(password) = &self.password {
+            params.insert("password", password.clone());
+        }
+        if let Some(description) = &self.description {
+            params.insert("description", description.clone());
+        }
+        if let Some(user_id) = &self.user_id {
+            params.insert("user-id", user_id.clone());
+        }
+
+        let information = match client.post("https://multiup.io/api/add-project")
+            .form(&params)
+            .send().await {
+            Ok(response) => {
+                match response.json::<AddProjectResponse>().await {
+                    Ok(information) => information,
+                    Err(error) => {
+                        return Err(LinkError::APIError(error.to_string()));
+                    }
+                }
+            },
+            Err(error) => {
+                return Err(LinkError::Reqwest(error));
+            }
+        };
+
+        Ok(information)
+    }
+}
+#[tokio::test]
+async fn test_add_project() {
+    let project = AddProject::new("This is a project name".to_string(), Some("123456".to_string()), Some("This is a description".to_string()), Some("1".to_string()));
+    match project.add_project().await {
+        Ok(response) => {println!("{:?}", response)}
+        Err(error) => {eprintln!("{:?}", error)}
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddProjectResponse {
+    pub error: String,
+    pub hash: Option<String>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub password: Option<String>
+}
+

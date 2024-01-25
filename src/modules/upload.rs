@@ -5,7 +5,7 @@ use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, ScrollArea, Text
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
-use crate::modules::api::{get_fastest_server, Login, LoginResponse, MultiUpUploadResponse, UploadedFileDetails};
+use crate::modules::api::{AddProject, get_fastest_server, Login, LoginResponse, MultiUpUploadResponse, UploadedFileDetails};
 use crate::modules::links::LinkError;
 
 #[derive(Default)]
@@ -33,6 +33,8 @@ pub enum UploadType {
 pub struct RemoteUploadSettings {
     is_project: bool,
     project_name: String,
+    project_password: String,
+    project_description: String,
     upload_links: String,
     file_names: String,
     data_streaming: bool
@@ -43,6 +45,8 @@ impl Default for RemoteUploadSettings {
         Self {
             is_project: false,
             project_name: String::new(),
+            project_password: String::new(),
+            project_description: String::new(),
             upload_links: String::new(),
             file_names: String::new(),
             data_streaming: true
@@ -234,13 +238,17 @@ impl UploadUI {
 
     fn display_remote_upload_ui(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            ui.add_enabled(self.login_response.user.is_some(),
-                           Checkbox::new(&mut self.remote_upload_settings.is_project, "Upload as project")
-            );
-            if self.remote_upload_settings.is_project {
-                ui.add(TextEdit::singleline(&mut self.remote_upload_settings.project_name)
-                    .hint_text("Enter project name"));
-            }
+            ui.checkbox(&mut self.remote_upload_settings.is_project, "Upload as project");
+            ui.vertical(|ui| {
+                if self.remote_upload_settings.is_project {
+                    ui.add(TextEdit::singleline(&mut self.remote_upload_settings.project_name)
+                        .hint_text("Enter project name"));
+                    ui.add(TextEdit::singleline(&mut self.remote_upload_settings.project_password)
+                        .hint_text("Enter project password (optional)"));
+                    ui.add(TextEdit::singleline(&mut self.remote_upload_settings.project_description)
+                        .hint_text("Enter project description (optional"));
+                }
+            });
         });
 
         ui.add_enabled(false, Checkbox::new(&mut self.remote_upload_settings.data_streaming, "Enable data streaming"));
@@ -252,7 +260,7 @@ impl UploadUI {
                     let half_width = ui.available_width() / 2.0;
 
                     ui.add(TextEdit::multiline(&mut self.remote_upload_settings.upload_links)
-                        .hint_text("Enter the URLS you want to remotely upload.")
+                        .hint_text("Enter the URLS you want to remotely upload, separated by a newline.")
                         .desired_width(half_width));
 
                     ui.add(TextEdit::multiline(&mut self.remote_upload_settings.file_names)
@@ -270,11 +278,40 @@ impl UploadUI {
                 let rt = Runtime::new().unwrap();
                 let remote_upload_settings = self.remote_upload_settings.clone();
                 let login_response = self.login_response.clone();
-
                 thread::spawn(move || {
                     rt.block_on(async {
                         let (urls, file_names) = process_urls_and_names(&remote_upload_settings.upload_links, &remote_upload_settings.file_names);
-                        let response = stream_file(login_response, &urls, &file_names).await;
+                        let remote_upload_settings_clone = remote_upload_settings.clone();
+                        let password = if !remote_upload_settings.project_password.is_empty() {
+                            Some(remote_upload_settings.project_password)
+                        } else {
+                            None
+                        };
+                        let description = if !remote_upload_settings.project_description.is_empty() {
+                            Some(remote_upload_settings.project_description)
+                        } else {
+                            None
+                        };
+                        let user = login_response.user.map(|user| user.to_string());
+
+                        let project_hash = if remote_upload_settings.is_project {
+                            let project = AddProject::new(
+                                remote_upload_settings.project_name,
+                                password,
+                                description,
+                                user
+                            );
+                            match project.add_project().await {
+                                Ok(response) => response.hash,
+                                Err(error) => {
+                                    upload_sender.send(Err(error)).unwrap();
+                                    return;
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        let response = stream_file(&urls, &file_names, login_response, remote_upload_settings_clone, project_hash).await;
                         upload_sender.send(response).unwrap();
                     });
                 });
@@ -331,7 +368,7 @@ fn process_urls_and_names(urls: &str, names: &str) -> (Vec<String>, Vec<String>)
 async fn test_download_and_upload_file_with_reqwest() {
     let urls = vec!["https://v2w3x4.debrid.it/dl/2zmoaog89f0/cis-33828253.pdf".to_string(), "https://v2w3x4.debrid.it/dl/2zmtn7j4919/cis-33828253.pdf".to_string()];
     let file_names = vec!["".to_string(), "".to_string()];
-    match stream_file(LoginResponse::default(), &urls, &file_names).await {
+    match stream_file(&urls, &file_names, LoginResponse::default(), RemoteUploadSettings::default(), None).await {
         Ok(_response) => {
             // println!("{}", response.url.unwrap());
         },
@@ -341,7 +378,7 @@ async fn test_download_and_upload_file_with_reqwest() {
     };
 }
 
-async fn stream_file(login_response: LoginResponse, download_urls: &[String], file_names: &[String]) -> Result<MultiUpUploadResponse, LinkError> {
+async fn stream_file(download_urls: &[String], file_names: &[String], login_response: LoginResponse, upload_settings: RemoteUploadSettings, project_hash: Option<String>) -> Result<MultiUpUploadResponse, LinkError> {
     let api_url = get_fastest_server().await?;
 
     // Create a reqwest client
@@ -361,8 +398,6 @@ async fn stream_file(login_response: LoginResponse, download_urls: &[String], fi
     let mut files = vec![];
     for (index, download_response) in responses.into_iter().enumerate() {
         let content_disposition = download_response.headers().get(reqwest::header::CONTENT_DISPOSITION);
-        println!("First: {:?}", content_disposition);
-        println!("Header: {:?}", download_response.headers());
         let file_name = match file_names.get(index) {
             Some(name) => {
                 if name.is_empty() {
@@ -391,9 +426,6 @@ async fn stream_file(login_response: LoginResponse, download_urls: &[String], fi
             }
         };
 
-        println!("End: {:?}", file_name);
-
-
         let content_length = download_response.headers().get(reqwest::header::CONTENT_LENGTH)
             .and_then(|cl| cl.to_str().ok())
             .and_then(|cl| cl.parse::<u64>().ok());
@@ -412,9 +444,15 @@ async fn stream_file(login_response: LoginResponse, download_urls: &[String], fi
     }
 
     // Create a multipart/form-data object
-    let mut form = multipart::Form::new()
-        // .part("files", part)
-        .text("project-hash", "testing");
+    let mut form = multipart::Form::new();
+
+    if let Some(id) = login_response.user {
+        form = form.text("user", id.to_string());
+    }
+
+    if let Some(hash) = project_hash {
+        form = form.text("project-hash", hash);
+    }
 
     for part in files {
         form = form.part("files[]", part);
@@ -446,6 +484,6 @@ async fn stream_file(login_response: LoginResponse, download_urls: &[String], fi
     //         println!("Upload Response: {:?}", upload_response);
     //     }
     // }
-
+    println!("Upload Response: {:?}", upload_response);
     Ok(upload_response)
 }

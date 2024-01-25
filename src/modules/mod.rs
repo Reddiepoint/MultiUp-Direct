@@ -1,5 +1,5 @@
 mod api;
-mod download;
+mod debrid;
 mod extract;
 mod filter;
 mod general;
