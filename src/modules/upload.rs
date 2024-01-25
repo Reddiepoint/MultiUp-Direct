@@ -1,9 +1,7 @@
-use reqwest::{Client, multipart, Response, Url};
-use std::error::Error;
-use std::num::ParseIntError;
+use reqwest::{Client, multipart};
 use std::thread;
-use crossbeam_channel::{Receiver, TryRecvError};
-use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, ScrollArea, TextBuffer, TextEdit, Ui, Window};
+use crossbeam_channel::Receiver;
+use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, ScrollArea, TextEdit, Ui, Window};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
@@ -394,7 +392,6 @@ async fn stream_file(login_response: LoginResponse, download_urls: &[String], fi
         };
 
         println!("End: {:?}", file_name);
-
 
 
         let content_length = download_response.headers().get(reqwest::header::CONTENT_LENGTH)
