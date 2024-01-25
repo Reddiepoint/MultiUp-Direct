@@ -76,9 +76,9 @@ impl DebridUI {
                 }
             }
         });
-        
+
         if ui.button("Unlock links").clicked() {
-            
+
         }
     }
 
@@ -127,7 +127,6 @@ impl DebridUI {
             .show(ui, |ui| {
                 ui.add(
                     TextEdit::multiline(&mut debrid_links)
-                        .hint_text("Paste your links here")
                         .desired_width(ui.available_width())
                 );
             });
