@@ -1,7 +1,8 @@
 use reqwest::{Client, multipart};
 use std::thread;
 use crossbeam_channel::Receiver;
-use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui;
+use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, Id, ScrollArea, TextEdit, Ui, Window};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
@@ -251,7 +252,18 @@ impl UploadUI {
             });
         });
 
-        ui.add_enabled(false, Checkbox::new(&mut self.remote_upload_settings.data_streaming, "Enable data streaming"));
+        ui.horizontal(|ui| {
+            ui.add_enabled(false, Checkbox::new(&mut self.remote_upload_settings.data_streaming, "Enable data streaming"));
+            if ui.label("(?)").hovered() {
+                egui::show_tooltip(ui.ctx(), Id::new("Data Streaming Tooltip"), |ui| {
+                    ui.label("Data streaming allows for better remote upload support by download and uploading the file at the same time. \
+                This bypasses remote upload restrictions (e.g. AllDebrid) because the connection is created by a regular computer. \
+                This comes at the cost of bandwidth usage (for downloading and uploading), compared to the regular remote upload (theoretically negligible), \
+                but the data is not saved to disk.");
+                });
+            };
+        });
+
 
         ScrollArea::vertical().id_source("Remote Upload Links")
             .max_height(ui.available_height() / 2.0)
