@@ -122,7 +122,8 @@ impl Login {
         }
     }
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 pub struct LoginResponse {
     pub error: String,
     pub login: Option<String>,
@@ -137,15 +138,20 @@ pub struct FastestServer {
     pub server: Option<String>,
 }
 
-pub async fn get_fastest_server() -> Result<String, Box<dyn Error>> {
-    let response = reqwest::get("https://multiup.io/api/get-fastest-server")
-        .await?
-        .json::<FastestServer>()
-        .await?;
+pub async fn get_fastest_server() -> Result<String, LinkError> {
+    let response = match reqwest::get("https://multiup.io/api/get-fastest-server").await {
+        Ok(response) => {
+            match response.json::<FastestServer>().await {
+                Ok(server) => server,
+                Err(error) => return Err(LinkError::APIError(error.to_string()))
+            }
+        },
+        Err(error) => return Err(LinkError::Reqwest(error))
+    };
 
     match response.server {
         Some(server) => Ok(server),
-        None => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "No server found")))
+        None => Err(LinkError::APIError("No server found".to_string()))
     }
 }
 
