@@ -29,8 +29,6 @@ impl DebridUI {
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
-
-
         let input_area_height = ui.available_height() / 2.0;
         ui.set_max_height(input_area_height);
         ScrollArea::both()
@@ -77,9 +75,7 @@ impl DebridUI {
             }
         });
 
-        if ui.button("Unlock links").clicked() {
-
-        }
+        if ui.button("Unlock links").clicked() {}
     }
 
     fn display_debrid_links_area(&mut self, ui: &mut Ui) {
