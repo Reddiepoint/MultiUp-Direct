@@ -293,7 +293,6 @@ impl UploadUI {
                 thread::spawn(move || {
                     rt.block_on(async {
                         let (urls, file_names) = process_urls_and_names(&remote_upload_settings.upload_links, &remote_upload_settings.file_names);
-                        let remote_upload_settings_clone = remote_upload_settings.clone();
                         let password = if !remote_upload_settings.project_password.is_empty() {
                             Some(remote_upload_settings.project_password)
                         } else {
@@ -323,7 +322,7 @@ impl UploadUI {
                         } else {
                             None
                         };
-                        let response = stream_file(&urls, &file_names, login_response, remote_upload_settings_clone, project_hash.clone()).await;
+                        let response = stream_file(&urls, &file_names, login_response, project_hash.clone()).await;
                         if let Ok(mut response) = response {
                             response.project_hash = project_hash;
                             upload_sender.send(Ok(response)).unwrap();
@@ -390,7 +389,7 @@ fn process_urls_and_names(urls: &str, names: &str) -> (Vec<String>, Vec<String>)
 async fn test_download_and_upload_file_with_reqwest() {
     let urls = vec!["https://v2w3x4.debrid.it/dl/2zmoaog89f0/cis-33828253.pdf".to_string(), "https://v2w3x4.debrid.it/dl/2zmtn7j4919/cis-33828253.pdf".to_string()];
     let file_names = vec!["".to_string(), "".to_string()];
-    match stream_file(&urls, &file_names, LoginResponse::default(), RemoteUploadSettings::default(), None).await {
+    match stream_file(&urls, &file_names, LoginResponse::default(), None).await {
         Ok(_response) => {
             // println!("{}", response.url.unwrap());
         },
@@ -400,7 +399,7 @@ async fn test_download_and_upload_file_with_reqwest() {
     };
 }
 
-async fn stream_file(download_urls: &[String], file_names: &[String], login_response: LoginResponse, upload_settings: RemoteUploadSettings, project_hash: Option<String>) -> Result<MultiUpUploadResponse, LinkError> {
+async fn stream_file(download_urls: &[String], file_names: &[String], login_response: LoginResponse, project_hash: Option<String>) -> Result<MultiUpUploadResponse, LinkError> {
     let api_url = get_fastest_server().await?;
 
     // Create a reqwest client
