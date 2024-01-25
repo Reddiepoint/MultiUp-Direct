@@ -243,3 +243,17 @@ pub struct AddProjectResponse {
     pub password: Option<String>
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AllDebridResponse {
+    pub link: String,
+    pub filename: String,
+    pub host: String,
+    pub streams: Vec<AllDebridStream>,
+
+
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AllDebridStream {
+
+}

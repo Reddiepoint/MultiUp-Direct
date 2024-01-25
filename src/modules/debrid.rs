@@ -9,10 +9,11 @@ struct Channels {}
 
 #[derive(Default)]
 pub struct DebridUI {
-    pub toasts: Toasts,
-    pub channels: Channels,
-    pub api_key: String,
-    pub input_links: String
+    toasts: Toasts,
+    channels: Channels,
+    api_key: String,
+    input_links: String,
+    debrid_links: String,
 }
 
 impl DebridUI {
@@ -28,6 +29,21 @@ impl DebridUI {
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
+
+
+        let input_area_height = ui.available_height() / 2.0;
+        ui.set_max_height(input_area_height);
+        ScrollArea::both()
+            .id_source("Link Input Area")
+            .max_height(input_area_height)
+            .show(ui, |ui| {
+                ui.add(
+                    TextEdit::multiline(&mut self.input_links)
+                        .hint_text("Paste your links here")
+                        .desired_width(ui.available_width()),
+                );
+            });
+
         ui.horizontal(|ui| {
             ui.label("API Key:");
             ui.add(TextEdit::singleline(&mut self.api_key)
@@ -60,22 +76,60 @@ impl DebridUI {
                 }
             }
         });
-
-        let input_area_height = ui.available_height() / 4.0;
-        ui.set_max_height(input_area_height);
-        ScrollArea::both()
-            .id_source("Link Input Area")
-            .max_height(input_area_height)
-            .show(ui, |ui| {
-                ui.add(
-                    TextEdit::multiline(&mut self.input_links)
-                        .hint_text("Paste your links here")
-                        .desired_width(ui.available_width()),
-                );
-            });
+        
+        if ui.button("Unlock links").clicked() {
+            
+        }
     }
 
     fn display_debrid_links_area(&mut self, ui: &mut Ui) {
-        
+        ui.heading("Debrid Links");
+        let mut debrid_links = self.debrid_links.clone();
+        ui.horizontal(|ui| {
+            let copy_normal_button = ui.button("Copy");
+
+            if copy_normal_button.clicked() {
+                self.toasts.add(Toast {
+                    text: "Copied debrid links".into(),
+                    kind: ToastKind::Info,
+                    options: ToastOptions::default()
+                        .duration_in_seconds(5.0)
+                        .show_progress(true)
+                        .show_icon(true)
+                });
+            }
+
+            let copy_quote_button = ui.button("Copy as \"{URL}\"");
+            if copy_quote_button.hovered() {
+                let mut new_debrid_links = String::new();
+                let links = debrid_links.split("\n");
+                for link in links {
+                    new_debrid_links = format!("{}\"{}\"\n", new_debrid_links, link);
+                }
+                debrid_links = new_debrid_links
+            }
+
+            if copy_quote_button.clicked() {
+                ui.output_mut(|output| output.copied_text = debrid_links.clone());
+                self.toasts.add(Toast {
+                    text: "Copied debrid links with quotes".into(),
+                    kind: ToastKind::Info,
+                    options: ToastOptions::default()
+                        .duration_in_seconds(5.0)
+                        .show_progress(true)
+                        .show_icon(true)
+                });
+            }
+        });
+        ScrollArea::both()
+            .id_source("Debrid Links Area")
+            .max_height(ui.available_height())
+            .show(ui, |ui| {
+                ui.add(
+                    TextEdit::multiline(&mut debrid_links)
+                        .hint_text("Paste your links here")
+                        .desired_width(ui.available_width())
+                );
+            });
     }
 }
