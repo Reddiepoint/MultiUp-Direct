@@ -629,10 +629,10 @@ async fn extract_direct_links(input_text: &str, recheck_validity: bool, cancel_r
     let processed_links = process_links(detected_links, cancel_receiver.clone()).await;
 
     // Return vec of completed links
-    let time_now = Instant::now();
+    // let time_now = Instant::now();
     let completed_links = get_direct_links(processed_links, recheck_validity, cancel_receiver).await;
-    let time_taken = time_now.elapsed();
-    println!("{}", time_taken.as_secs_f32());
+    // let time_taken = time_now.elapsed();
+    // println!("{}", time_taken.as_secs_f32());
     completed_links
 }
 
