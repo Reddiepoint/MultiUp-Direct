@@ -1,7 +1,7 @@
 use std::{fs, thread};
 use std::sync::OnceLock;
 use crossbeam_channel::Receiver;
-use eframe::egui::{Align2, Context, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui::{Align2, ComboBox, Context, ScrollArea, TextEdit, Ui, Window};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use regex::Regex;
@@ -16,7 +16,7 @@ struct Channels {
     pub debrid: Option<Receiver<Vec<Result<AllDebridResponse, LinkError>>>>
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 enum DebridService {
     #[default]
     AllDebrid,
@@ -50,11 +50,27 @@ impl DebridUI {
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Choose debrid service:");
+            ComboBox::from_id_source("Upload Type")
+                .selected_text(match self.debrid_service {
+                    DebridService::AllDebrid => "AllDebrid",
+                    DebridService::RealDebrid => "RealDebrid"
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.debrid_service, DebridService::AllDebrid, "AllDebrid");
+                    ui.selectable_value(&mut self.debrid_service, DebridService::RealDebrid, "RealDebrid");
+                });
+        });
 
         ui.horizontal(|ui| {
             ui.label("API Key:");
             ui.add(TextEdit::singleline(&mut self.api_key)
-                .hint_text("Enter your AllDebrid API key here"));
+                .hint_text(format!("Enter your {} API key here",
+                                   match self.debrid_service {
+                                       DebridService::AllDebrid => "AllDebrid",
+                                       DebridService::RealDebrid => "RealDebrid"
+                                   })));
 
             if ui.button("Read from file").clicked() {
                 let api_key = fs::read_to_string("./api_key.txt");
@@ -83,6 +99,8 @@ impl DebridUI {
                 }
             }
         });
+
+        ui.heading("Input Links");
 
         let input_area_height = ui.available_height() / 2.0;
         // ui.set_max_height(input_area_height);
