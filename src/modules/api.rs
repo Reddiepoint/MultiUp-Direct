@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::future::Future;
 use crossbeam_channel::{Receiver, TryRecvError};
@@ -43,13 +43,13 @@ impl MultiUpLinkInformation {
     }
 }
 
-pub async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>) -> DownloadLink {
+pub async fn recheck_validity_api(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>, client: Client) -> DownloadLink {
     if let Ok(_) | Err(TryRecvError::Disconnected) = cancel_receiver.try_recv() {
         download_link.status = Some(Err(LinkError::Cancelled));
         return download_link;
     }
 
-    let client = Client::new();
+    // let client = Client::new();
     let mut params = HashMap::new();
     params.insert("link", mirror_link);
     let information = match client.post("https://multiup.io/api/check-file")
@@ -225,12 +225,13 @@ impl AddProject {
         Ok(information)
     }
 }
+
 #[tokio::test]
 async fn test_add_project() {
     let project = AddProject::new("This is a project name".to_string(), Some("123456".to_string()), Some("This is a description".to_string()), Some("1".to_string()));
     match project.add_project().await {
-        Ok(response) => {println!("{:?}", response)}
-        Err(error) => {eprintln!("{:?}", error)}
+        Ok(response) => { println!("{:?}", response) }
+        Err(error) => { eprintln!("{:?}", error) }
     }
 }
 
@@ -243,6 +244,37 @@ pub struct AddProjectResponse {
     pub password: Option<String>
 }
 
+#[derive(Debug, Default, Deserialize)]
+pub struct AvailableHosts {
+    pub error: String,
+    pub hosts: BTreeMap<String, HostDetails>,
+    pub default: Vec<String>,
+    #[serde(rename = "maxHosts")]
+    pub max_hosts: u32,
+}
+
+impl AvailableHosts {
+    pub async fn get() -> Result<Self, LinkError> {
+        match reqwest::get("https://multiup.io/api/get-list-hosts").await {
+            Ok(response) => match response.json::<AvailableHosts>().await {
+                Ok(hosts) => Ok(hosts),
+                Err(error) => Err(LinkError::APIError(error.to_string())),
+            },
+            Err(error) => Err(LinkError::Reqwest(error)),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HostDetails {
+    #[serde(rename = "selected")]
+    pub selection: String,
+    #[serde(skip)]
+    pub selected: bool,
+    pub size: u64,
+}
+
+
 #[derive(Debug, Deserialize)]
 pub struct AllDebridResponse {
     pub link: String,
@@ -250,10 +282,7 @@ pub struct AllDebridResponse {
     pub host: String,
     pub streams: Vec<AllDebridStream>,
 
-
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AllDebridStream {
-
-}
+pub struct AllDebridStream {}

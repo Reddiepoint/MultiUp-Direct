@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
 use reqwest::{Client, multipart};
 use std::thread;
 use crossbeam_channel::Receiver;
@@ -6,20 +7,25 @@ use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, Id, ScrollArea, 
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
-use crate::modules::api::{AddProject, get_fastest_server, Login, LoginResponse, MultiUpUploadResponse, UploadedFileDetails};
+use crate::modules::api::{AddProject, AvailableHosts, get_fastest_server, Login, LoginResponse, MultiUpUploadResponse, UploadedFileDetails};
 use crate::modules::links::LinkError;
 
 #[derive(Default)]
 struct Channels {
     login: Option<Receiver<Result<LoginResponse, LinkError>>>,
+    hosts: Option<Receiver<Result<AvailableHosts, LinkError>>>,
     upload: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>,
 }
 
 impl Channels {
-    fn new(login_receiver: Option<Receiver<Result<LoginResponse, LinkError>>>, upload_receiver: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>, ) -> Self {
+    fn new(login_receiver: Option<Receiver<Result<LoginResponse, LinkError>>>,
+           host_receiver: Option<Receiver<Result<AvailableHosts, LinkError>>>,
+           upload_receiver: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>
+    ) -> Self {
         Self {
             login: login_receiver,
-            upload: upload_receiver,
+            hosts: host_receiver,
+            upload: upload_receiver
         }
     }
 }
@@ -38,7 +44,8 @@ pub struct RemoteUploadSettings {
     project_description: String,
     upload_links: String,
     file_names: String,
-    data_streaming: bool
+    data_streaming: bool,
+    hosts: HashSet<String>
 }
 
 impl Default for RemoteUploadSettings {
@@ -50,7 +57,8 @@ impl Default for RemoteUploadSettings {
             project_description: String::new(),
             upload_links: String::new(),
             file_names: String::new(),
-            data_streaming: true
+            data_streaming: true,
+            hosts: HashSet::new()
         }
     }
 }
@@ -64,6 +72,7 @@ pub struct UploadUI {
     login_response: LoginResponse,
     upload_type: UploadType,
     remote_upload_settings: RemoteUploadSettings,
+    hosts: AvailableHosts,
     uploading: bool,
     multiup_links: Vec<String>,
 }
@@ -176,7 +185,7 @@ impl UploadUI {
 
                     if ui.button("Login").clicked() {
                         let (login_sender, login_receiver) = crossbeam_channel::unbounded();
-                        self.channels = Channels::new(Some(login_receiver), self.channels.upload.clone());
+                        self.channels = Channels::new(Some(login_receiver), self.channels.hosts.clone(), self.channels.upload.clone());
 
                         let rt = Runtime::new().unwrap();
                         let login_details = self.login_details.clone();
@@ -282,14 +291,104 @@ impl UploadUI {
                 });
             });
 
+        if self.hosts.hosts.is_empty() && self.channels.hosts.is_none() {
+            self.toasts.add(Toast {
+                text: "Getting hosts".into(),
+                kind: ToastKind::Warning,
+                options: ToastOptions::default()
+                    .duration_in_seconds(5.0)
+                    .show_progress(true)
+                    .show_icon(true)
+            });
+
+            let (hosts_sender, hosts_receiver) = crossbeam_channel::unbounded();
+            self.channels = Channels::new(self.channels.login.clone(), Some(hosts_receiver), self.channels.upload.clone());
+            let rt = Runtime::new().unwrap();
+            thread::spawn(move || {
+                rt.block_on(async {
+                    let hosts = AvailableHosts::get().await;
+
+                    hosts_sender.send(hosts).unwrap();
+                });
+            });
+        }
+
+        if let Some(hosts) = &self.channels.hosts {
+            if let Ok(hosts) = hosts.try_recv() {
+                match hosts {
+                    Ok(mut hosts) => {
+                        for (_host, details) in hosts.hosts.iter_mut() {
+                            if details.selection == "true" {
+                                details.selected = true;
+                            } else if details.selection == "false" {
+                                details.selected = false;
+                            }
+                        }
+                        self.hosts = hosts;
+                    }
+                    Err(error) => {
+                        self.toasts.add(Toast {
+                            text: format!("Failed to get hosts: {:?}", error).into(),
+                            kind: ToastKind::Error,
+                            options: ToastOptions::default()
+                                .duration_in_seconds(10.0)
+                                .show_progress(true)
+                                .show_icon(true)
+                        });
+                    }
+                }
+            }
+        }
+
+        ui.heading("Hosts");
+
+        ui.horizontal(|ui| {
+            if ui.button("Select all").clicked() {
+                for (_host, details) in self.hosts.hosts.iter_mut() {
+                    details.selected = true;
+                }
+            }
+
+            if ui.button("Select default").clicked() {
+                for (host, details) in self.hosts.hosts.iter_mut() {
+                    details.selected = self.hosts.default.contains(host);
+                }
+            }
+
+            let select_user_hosts = ui.button("Select user favourites");
+            if select_user_hosts.hovered() {
+                egui::show_tooltip(ui.ctx(), Id::new("User Favourites Tooltip"), |ui| {
+                    ui.label("Deselect all hosts to use the account's favourite hosts.");
+                });
+            }
+
+            if select_user_hosts.clicked() {
+                for (_host, details) in self.hosts.hosts.iter_mut() {
+                    details.selected = false;
+                }
+            }
+
+        });
+
+        ui.columns(5, |columns| {
+            for (host, details) in self.hosts.hosts.iter_mut() {
+                columns[0].checkbox(&mut details.selected, format!("{} ({} GB)", host, details.size / 1024));
+                columns.rotate_left(1);
+            }
+        });
+
         ui.horizontal(|ui| {
             if ui.add_enabled(!self.uploading, Button::new("Upload to MultiUp")).clicked() {
                 self.uploading = true;
                 let (upload_sender, upload_receiver) = crossbeam_channel::unbounded();
-                self.channels = Channels::new(self.channels.login.clone(), Some(upload_receiver));
-                let rt = Runtime::new().unwrap();
+                self.channels = Channels::new(self.channels.login.clone(), self.channels.hosts.clone(), Some(upload_receiver));
+                self.remote_upload_settings.hosts = self.hosts.hosts.iter()
+                    .filter(|(_, details)| details.selected)
+                    .map(|(host, _)| host.to_string())
+                    .collect();
                 let remote_upload_settings = self.remote_upload_settings.clone();
                 let login_response = self.login_response.clone();
+                let rt = Runtime::new().unwrap();
                 thread::spawn(move || {
                     rt.block_on(async {
                         let (urls, file_names) = process_urls_and_names(&remote_upload_settings.upload_links, &remote_upload_settings.file_names);
@@ -322,7 +421,7 @@ impl UploadUI {
                         } else {
                             None
                         };
-                        let response = stream_file(&urls, &file_names, login_response, project_hash.clone()).await;
+                        let response = stream_file(&urls, &file_names, login_response, remote_upload_settings.hosts, project_hash.clone()).await;
                         if let Ok(mut response) = response {
                             response.project_hash = project_hash;
                             upload_sender.send(Ok(response)).unwrap();
@@ -389,7 +488,7 @@ fn process_urls_and_names(urls: &str, names: &str) -> (Vec<String>, Vec<String>)
 async fn test_download_and_upload_file_with_reqwest() {
     let urls = vec!["https://v2w3x4.debrid.it/dl/2zmoaog89f0/cis-33828253.pdf".to_string(), "https://v2w3x4.debrid.it/dl/2zmtn7j4919/cis-33828253.pdf".to_string()];
     let file_names = vec!["".to_string(), "".to_string()];
-    match stream_file(&urls, &file_names, LoginResponse::default(), None).await {
+    match stream_file(&urls, &file_names, LoginResponse::default(), HashSet::new(), None).await {
         Ok(_response) => {
             // println!("{}", response.url.unwrap());
         },
@@ -399,7 +498,7 @@ async fn test_download_and_upload_file_with_reqwest() {
     };
 }
 
-async fn stream_file(download_urls: &[String], file_names: &[String], login_response: LoginResponse, project_hash: Option<String>) -> Result<MultiUpUploadResponse, LinkError> {
+async fn stream_file(download_urls: &[String], file_names: &[String], login_response: LoginResponse, hosts: HashSet<String>, project_hash: Option<String>) -> Result<MultiUpUploadResponse, LinkError> {
     let api_url = get_fastest_server().await?;
 
     // Create a reqwest client
@@ -473,6 +572,10 @@ async fn stream_file(download_urls: &[String], file_names: &[String], login_resp
 
     if let Some(hash) = project_hash {
         form = form.text("project-hash", hash);
+    }
+
+    for host in hosts {
+        form = form.text(host, "true");
     }
 
     for part in files {

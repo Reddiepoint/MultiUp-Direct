@@ -848,15 +848,17 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
     // At the beginning of the function
     let semaphore = Arc::new(Semaphore::new(200));
     let mut tasks = Vec::new();
+    let client = Client::new();
     for link in multiup_links {
         let cancel_receiver = cancel_receiver.clone();
+        let client = client.clone();
         match link {
             MultiUpLink::Project(project_link) => {
                 // Create a task for each project link
                 let semaphore = Arc::clone(&semaphore);
                 let task = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
-                    let project = get_direct_links_from_project(project_link, recheck_validity, cancel_receiver).await;
+                    let project = get_direct_links_from_project(project_link, recheck_validity, cancel_receiver, client).await;
                     MultiUpLink::Project(project)
                 });
                 tasks.push(task);
@@ -866,7 +868,7 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
                 let semaphore = Arc::clone(&semaphore);
                 let task = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
-                    let download = get_direct_links_from_download_link(download_link, recheck_validity, cancel_receiver).await;
+                    let download = get_direct_links_from_download_link(download_link, recheck_validity, cancel_receiver, client).await;
                     MultiUpLink::Download(download)
                 });
                 tasks.push(task);
@@ -884,7 +886,7 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
     multiup_links
 }
 
-async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> ProjectLink {
+async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client) -> ProjectLink {
     if project_link.download_links.is_none() {
         return project_link;
     }
@@ -893,11 +895,12 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
     let mut tasks = Vec::new();
 
     for link in project_link.download_links.take().unwrap() {
+        let client = client.clone();
         let semaphore = Arc::clone(&semaphore);
         let cancel_receiver = cancel_receiver.clone();
         let task = tokio::spawn(async move {
             let _permit = semaphore.acquire().await.unwrap();
-            get_direct_links_from_download_link(link, recheck_validity, cancel_receiver).await
+            get_direct_links_from_download_link(link, recheck_validity, cancel_receiver, client).await
         });
         tasks.push(task);
     }
@@ -914,10 +917,10 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
 
 const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 
-async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> DownloadLink {
+async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client) -> DownloadLink {
     let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
     if recheck_validity {
-        recheck_validity_api(mirror_link, download_link, cancel_receiver).await
+        recheck_validity_api(mirror_link, download_link, cancel_receiver, client).await
     } else {
         process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await
     }
