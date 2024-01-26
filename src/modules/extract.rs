@@ -54,17 +54,21 @@ pub struct ExtractUI {
 
 impl ExtractUI {
     pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
+        extract_ui.toasts = Toasts::new()
+            .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
+            .direction(TopDown);
+
         extract_ui.display_input_area(ui);
         extract_ui.display_footer(ctx);
         extract_ui.display_output_area(ui);
+
         extract_ui.toasts.show(ctx);
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
         ui.heading("MultiUp Links");
-
         let input_area_height = ui.available_height() / 4.0;
-        ui.set_max_height(input_area_height);
+        // ui.set_max_height(input_area_height);
         ScrollArea::both()
             .id_source("MultiUp Link Input Area")
             .max_height(input_area_height)
@@ -164,10 +168,6 @@ impl ExtractUI {
                 }
 
                 ui.label(format!("{}/{} extracted successfully", successful_links, total_links));
-
-                self.toasts = Toasts::new()
-                    .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
-                    .direction(TopDown);
 
                 if successful_links != total_links && !self.shown_toast {
                     self.toasts.add(Toast {

@@ -16,11 +16,18 @@ struct Channels {
     pub debrid: Option<Receiver<Vec<Result<AllDebridResponse, LinkError>>>>
 }
 
+#[derive(Default)]
+enum DebridService {
+    #[default]
+    AllDebrid,
+    RealDebrid
+}
 
 #[derive(Default)]
 pub struct DebridUI {
     toasts: Toasts,
     channels: Channels,
+    debrid_service: DebridService,
     api_key: String,
     input_links: String,
     input_links_vec: Vec<String>,
@@ -43,18 +50,6 @@ impl DebridUI {
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
-        let input_area_height = ui.available_height() / 2.0;
-        ui.set_max_height(input_area_height);
-        ScrollArea::both()
-            .id_source("Link Input Area")
-            .max_height(input_area_height)
-            .show(ui, |ui| {
-                ui.add(
-                    TextEdit::multiline(&mut self.input_links)
-                        .hint_text("Paste your links here")
-                        .desired_width(ui.available_width()),
-                );
-            });
 
         ui.horizontal(|ui| {
             ui.label("API Key:");
@@ -88,6 +83,21 @@ impl DebridUI {
                 }
             }
         });
+
+        let input_area_height = ui.available_height() / 2.0;
+        // ui.set_max_height(input_area_height);
+        ScrollArea::both()
+            .id_source("Link Input Area")
+            .max_height(input_area_height)
+            .show(ui, |ui| {
+                ui.add(
+                    TextEdit::multiline(&mut self.input_links)
+                        .hint_text("Paste your links here")
+                        .desired_width(ui.available_width()),
+                );
+            });
+
+
         ui.horizontal(|ui| {
             if ui.button("Unlock links").clicked() {
                 self.unlocking = true;
@@ -234,7 +244,7 @@ static LINK_REGEX: OnceLock<Regex> = OnceLock::new();
 fn process_links(links: &str) -> Vec<String> {
     let mut detected_links = vec![];
     let link_regex = LINK_REGEX
-        .get_or_init(|| Regex::new(r#"(https?)://([^/\s]+)(/[^?\s]*)?(\?[^#\s]*)?(#\S*)?"#).unwrap());
+        .get_or_init(|| Regex::new(r#"(https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(),]|%[0-9a-fA-F][0-9a-fA-F]|#)+)"#).unwrap());
     for captures in link_regex.captures_iter(links) {
         let link = captures[0].to_string();
         detected_links.push(link);
