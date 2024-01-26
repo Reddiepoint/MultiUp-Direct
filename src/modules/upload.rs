@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 use reqwest::{Client, multipart};
 use std::thread;
 use crossbeam_channel::Receiver;

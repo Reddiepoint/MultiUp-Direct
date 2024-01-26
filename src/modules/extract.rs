@@ -7,7 +7,6 @@ use reqwest::Client;
 use scraper::{ElementRef, Selector};
 use std::sync::{Arc, OnceLock};
 use std::thread;
-use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};

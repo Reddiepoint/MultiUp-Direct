@@ -7,9 +7,9 @@ use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use regex::Regex;
 use reqwest::Client;
 use tokio::runtime::Runtime;
-use crate::modules::api::{AllDebridResponse, AvailableHosts, unlock_links};
-use crate::modules::links::{LinkError, MultiUpLink};
-use crate::modules::upload::UploadUI;
+use crate::modules::api::{AllDebridResponse, unlock_links};
+use crate::modules::links::{LinkError};
+
 
 #[derive(Default)]
 struct Channels {
@@ -25,7 +25,6 @@ pub struct DebridUI {
     input_links: String,
     input_links_vec: Vec<String>,
     unlocking: bool,
-    completed_links: Vec<Result<AllDebridResponse, LinkError>>,
     debrid_links: String,
     error_log_open: bool,
     error_log_text: String,
@@ -235,7 +234,7 @@ static LINK_REGEX: OnceLock<Regex> = OnceLock::new();
 fn process_links(links: &str) -> Vec<String> {
     let mut detected_links = vec![];
     let link_regex = LINK_REGEX
-        .get_or_init(|| Regex::new(r#"(http[s]?)://([^/\s]+)(/[^?\s]*)?(\?[^#\s]*)?(#\S*)?"#).unwrap());
+        .get_or_init(|| Regex::new(r#"(https?)://([^/\s]+)(/[^?\s]*)?(\?[^#\s]*)?(#\S*)?"#).unwrap());
     for captures in link_regex.captures_iter(links) {
         let link = captures[0].to_string();
         detected_links.push(link);
