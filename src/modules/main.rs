@@ -1,9 +1,9 @@
 use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
-use crate::modules::debrid::DebridUI;
 use crate::modules::extract::ExtractUI;
-use crate::modules::help::HelpUI;
+use crate::modules::debrid::DebridUI;
 use crate::modules::upload::UploadUI;
+use crate::modules::help::HelpUI;
 
 /// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
@@ -93,6 +93,7 @@ impl MultiUpDirect {
             }
 
             ExtractUI::display_error_log(&mut self.extract_ui, ctx);
+            DebridUI::display_error_log(&mut self.debrid_ui, ctx);
             HelpUI::show_help(ctx, &mut self.help_ui);
             HelpUI::show_update(ctx, &mut self.help_ui);
         });

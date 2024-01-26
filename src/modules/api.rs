@@ -277,12 +277,57 @@ pub struct HostDetails {
 
 #[derive(Debug, Deserialize)]
 pub struct AllDebridResponse {
-    pub link: String,
-    pub filename: String,
-    pub host: String,
-    pub streams: Vec<AllDebridStream>,
-
+    pub status: String,
+    pub data: AllDebridData,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AllDebridStream {}
+pub struct AllDebridData {
+    pub link: String,
+    filename: String,
+    host: String,
+    #[serde(default)]
+    streams: Vec<AllDebridStream>,
+    streaming: Vec<AllDebridStream>,
+    paws: bool,
+    filesize: u64,
+    id: String,
+    #[serde(rename = "hostDomain")]
+    host_domain: Option<String>,
+    delayed: Option<u64>
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AllDebridStream {
+    // pub id: Option<String>,
+    // pub ext: Option<String>,
+    // pub quality: Option<String>,
+    // pub filesize: Option<u64>,
+    // pub proto: Option<String>,
+    // pub name: Option<String>,
+    // pub tb: Option<f64>,
+    // pub abr: Option<f64>,
+}
+
+pub async fn unlock_links(link: &str, api_key: &str, client: Client) -> Result<AllDebridResponse, LinkError> {
+    let query = format!("https://api.alldebrid.com/v4/link/unlock?agent=MultiUp-Direct&apikey={}&link={}", api_key, link);
+    match client.get(query).send().await {
+        Ok(response) => match response.json::<AllDebridResponse>().await {
+            Ok(data) => Ok(data),
+            Err(error) => Err(LinkError::APIError(error.to_string())),
+        },
+        Err(error) => Err(LinkError::Reqwest(error))
+    }
+}
+
+#[tokio::test]
+async fn test_unlock_links() {
+    // "https://api.alldebrid.com/v4/link/unlock?agent=MultiUp-Direct&apikey=exPWXN1xUDzEm5CwYU9D&link=https://1fichier.com/?jgmylyaet2btcy3jp5gi"
+    let client = Client::new();
+    let link = "https://alldebrid.com/link/1234567890";
+    let api_key = "1234567890";
+    match unlock_links(link, api_key, client).await {
+        Ok(response) => { println!("{:?}", response) }
+        Err(error) => { eprintln!("{:?}", error) }
+    }
+}

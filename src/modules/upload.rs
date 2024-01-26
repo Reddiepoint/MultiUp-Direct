@@ -17,18 +17,18 @@ struct Channels {
     upload: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>,
 }
 
-impl Channels {
-    fn new(login_receiver: Option<Receiver<Result<LoginResponse, LinkError>>>,
-           host_receiver: Option<Receiver<Result<AvailableHosts, LinkError>>>,
-           upload_receiver: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>
-    ) -> Self {
-        Self {
-            login: login_receiver,
-            hosts: host_receiver,
-            upload: upload_receiver
-        }
-    }
-}
+// impl Channels {
+//     fn new(login_receiver: Option<Receiver<Result<LoginResponse, LinkError>>>,
+//            host_receiver: Option<Receiver<Result<AvailableHosts, LinkError>>>,
+//            upload_receiver: Option<Receiver<Result<MultiUpUploadResponse, LinkError>>>
+//     ) -> Self {
+//         Self {
+//             login: login_receiver,
+//             hosts: host_receiver,
+//             upload: upload_receiver
+//         }
+//     }
+// }
 
 #[derive(Default, PartialEq)]
 pub enum UploadType {
@@ -185,8 +185,7 @@ impl UploadUI {
 
                     if ui.button("Login").clicked() {
                         let (login_sender, login_receiver) = crossbeam_channel::unbounded();
-                        self.channels = Channels::new(Some(login_receiver), self.channels.hosts.clone(), self.channels.upload.clone());
-
+                        self.channels.login = Some(login_receiver);
                         let rt = Runtime::new().unwrap();
                         let login_details = self.login_details.clone();
                         thread::spawn(move || {
@@ -302,7 +301,7 @@ impl UploadUI {
             });
 
             let (hosts_sender, hosts_receiver) = crossbeam_channel::unbounded();
-            self.channels = Channels::new(self.channels.login.clone(), Some(hosts_receiver), self.channels.upload.clone());
+            self.channels.hosts = Some(hosts_receiver);
             let rt = Runtime::new().unwrap();
             thread::spawn(move || {
                 rt.block_on(async {
@@ -381,7 +380,7 @@ impl UploadUI {
             if ui.add_enabled(!self.uploading, Button::new("Upload to MultiUp")).clicked() {
                 self.uploading = true;
                 let (upload_sender, upload_receiver) = crossbeam_channel::unbounded();
-                self.channels = Channels::new(self.channels.login.clone(), self.channels.hosts.clone(), Some(upload_receiver));
+                self.channels.upload = Some(upload_receiver);
                 self.remote_upload_settings.hosts = self.hosts.hosts.iter()
                     .filter(|(_, details)| details.selected)
                     .map(|(host, _)| host.to_string())

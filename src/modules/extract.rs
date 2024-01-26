@@ -236,7 +236,7 @@ impl ExtractUI {
     }
 
     pub fn display_error_log(&mut self, ctx: &Context) {
-        Window::new("Error Log")
+        Window::new("Extract Error Log")
             .default_width(200.0)
             .open(&mut self.error_log_open)
             .show(ctx, |ui| {
