@@ -66,7 +66,7 @@ impl DebridUI {
 
     fn display_input_area(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            ui.label("Choose debrid service:");
+            ui.label("Choose Debrid service:");
             ComboBox::from_id_source("Upload Type")
                 .selected_text(match self.debrid_service {
                     DebridService::AllDebrid => "AllDebrid",
@@ -296,7 +296,7 @@ impl DebridUI {
             if copy_normal_button.clicked() {
                 ui.output_mut(|output| output.copied_text = debrid_links.clone());
                 self.toasts.add(Toast {
-                    text: "Copied debrid links".into(),
+                    text: "Copied Debrid links".into(),
                     kind: ToastKind::Info,
                     options: ToastOptions::default()
                         .duration_in_seconds(5.0)
@@ -318,7 +318,7 @@ impl DebridUI {
             if copy_quote_button.clicked() {
                 ui.output_mut(|output| output.copied_text = debrid_links.clone());
                 self.toasts.add(Toast {
-                    text: "Copied debrid links with quotes".into(),
+                    text: "Copied Debrid links with quotes".into(),
                     kind: ToastKind::Info,
                     options: ToastOptions::default()
                         .duration_in_seconds(5.0)
@@ -340,7 +340,7 @@ impl DebridUI {
             if copy_quote_and_spaces_button.clicked() {
                 ui.output_mut(|output| output.copied_text = debrid_links.clone());
                 self.toasts.add(Toast {
-                    text: "Copied debrid links with quotes and spaces".into(),
+                    text: "Copied Debrid links with quotes and spaces".into(),
                     kind: ToastKind::Info,
                     options: ToastOptions::default()
                         .duration_in_seconds(5.0)
