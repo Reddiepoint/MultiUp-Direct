@@ -6,21 +6,34 @@ use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use regex::Regex;
 use reqwest::Client;
+use serde::Deserialize;
 use tokio::runtime::Runtime;
-use crate::modules::api::{AllDebridResponse, unlock_links};
+use crate::modules::api::{AllDebridResponse, RealDebridResponse, unlock_links};
 use crate::modules::links::{LinkError};
 
+pub enum DebridResponse {
+    AllDebrid(Result<AllDebridResponse, LinkError>),
+    RealDebrid(Result<RealDebridResponse, LinkError>),
+}
 
 #[derive(Default)]
 struct Channels {
-    pub debrid: Option<Receiver<Vec<Result<AllDebridResponse, LinkError>>>>
+    pub debrid: Option<Receiver<Vec<DebridResponse>>>
 }
 
-#[derive(Default, PartialEq)]
-enum DebridService {
+#[derive(Clone, Default, PartialEq)]
+pub enum DebridService {
     #[default]
     AllDebrid,
     RealDebrid
+}
+
+#[derive(Clone, Default, Deserialize)]
+struct DebridAPIKeys {
+    #[serde(default)]
+    all_debrid: String,
+    #[serde(default)]
+    real_debrid: String
 }
 
 #[derive(Default)]
@@ -28,7 +41,7 @@ pub struct DebridUI {
     toasts: Toasts,
     channels: Channels,
     debrid_service: DebridService,
-    api_key: String,
+    api_key: DebridAPIKeys,
     input_links: String,
     input_links_vec: Vec<String>,
     unlocking: bool,
@@ -65,30 +78,75 @@ impl DebridUI {
 
         ui.horizontal(|ui| {
             ui.label("API Key:");
-            ui.add(TextEdit::singleline(&mut self.api_key)
-                .hint_text(format!("Enter your {} API key here",
-                                   match self.debrid_service {
-                                       DebridService::AllDebrid => "AllDebrid",
-                                       DebridService::RealDebrid => "RealDebrid"
-                                   })));
+            match self.debrid_service {
+                DebridService::AllDebrid => {
+                    ui.add(TextEdit::singleline(&mut self.api_key.all_debrid)
+                        .hint_text("Enter your AllDebrid API key here"));
+                },
+                DebridService::RealDebrid => {
+                    ui.add(TextEdit::singleline(&mut self.api_key.real_debrid)
+                        .hint_text("Enter your RealDebrid API key here"));
+                }
+            };
 
             if ui.button("Read from file").clicked() {
-                let api_key = fs::read_to_string("./api_key.txt");
-                match api_key {
-                    Ok(key) => {
-                        self.api_key = key.trim().to_string();
-                        self.toasts.add(Toast {
-                            text: "Successfully read API key".into(),
-                            kind: ToastKind::Success,
-                            options: ToastOptions::default()
-                                .duration_in_seconds(5.0)
-                                .show_progress(true)
-                                .show_icon(true)
-                        });
+                let api_key_json = fs::read_to_string("./api_key.json");
+                match api_key_json {
+                    Ok(json_string) => {
+                        let api_key_result: Result<DebridAPIKeys, _> = serde_json::from_str(&json_string);
+                        match api_key_result {
+                            Ok(debrid_api_keys) => {
+                                self.api_key = debrid_api_keys;
+                                match self.debrid_service {
+                                    DebridService::AllDebrid => {
+                                        if self.api_key.all_debrid.is_empty() {
+                                            self.toasts.add(Toast {
+                                                text: "API key not found for AllDebrid".into(),
+                                                kind: ToastKind::Warning,
+                                                options: ToastOptions::default()
+                                                    .duration_in_seconds(5.0)
+                                                    .show_progress(true)
+                                                    .show_icon(true)
+                                            });
+                                        }
+                                    }
+                                    DebridService::RealDebrid => {
+                                        if self.api_key.real_debrid.is_empty() {
+                                            self.toasts.add(Toast {
+                                                text: "API key not found for RealDebrid".into(),
+                                                kind: ToastKind::Warning,
+                                                options: ToastOptions::default()
+                                                    .duration_in_seconds(5.0)
+                                                    .show_progress(true)
+                                                    .show_icon(true)
+                                            });
+                                        }
+                                    }
+                                }
+                                self.toasts.add(Toast {
+                                    text: "Successfully read API key".into(),
+                                    kind: ToastKind::Success,
+                                    options: ToastOptions::default()
+                                        .duration_in_seconds(5.0)
+                                        .show_progress(true)
+                                        .show_icon(true)
+                                });
+                            }
+                            Err(_) => {
+                                self.toasts.add(Toast {
+                                    text: "Failed to parse \"api_key.json\"".into(),
+                                    kind: ToastKind::Error,
+                                    options: ToastOptions::default()
+                                        .duration_in_seconds(5.0)
+                                        .show_progress(true)
+                                        .show_icon(true)
+                                });
+                            }
+                        }
                     }
                     Err(_) => {
                         self.toasts.add(Toast {
-                            text: "Failed to read \"api_key.txt\"".into(),
+                            text: "Failed to read \"api_key.json\"".into(),
                             kind: ToastKind::Error,
                             options: ToastOptions::default()
                                 .duration_in_seconds(5.0)
@@ -123,15 +181,30 @@ impl DebridUI {
                 self.channels.debrid = Some(debrid_receiver);
                 self.input_links_vec = process_links(&self.input_links);
                 let links = self.input_links_vec.clone();
-                let api_key = self.api_key.clone();
+                let debrid_service = self.debrid_service.clone();
+                let api_key = match self.debrid_service {
+                    DebridService::AllDebrid => self.api_key.all_debrid.clone(),
+                    DebridService::RealDebrid => self.api_key.real_debrid.clone()
+                };
                 let rt = Runtime::new().unwrap();
                 thread::spawn(move || {
                     rt.block_on(async {
                         let client = Client::new();
-                        let mut debrid_links = vec![];
+                        let mut tasks = vec![];
                         for link in links {
-                            let debrid_link = unlock_links(&link, &api_key, client.clone()).await;
-                            debrid_links.push(debrid_link);
+                            let link = link.clone();
+                            let debrid_service = debrid_service.clone();
+                            let api_key = api_key.clone();
+                            let client = client.clone();
+                            let task = tokio::spawn(async move {
+                                unlock_links(&link, debrid_service, &api_key, client).await
+                            });
+                            tasks.push(task);
+                        }
+                        let mut debrid_links = vec![];
+                        let results = futures::future::join_all(tasks).await;
+                        for result in results {
+                            debrid_links.push(result.unwrap());
                         }
                         debrid_sender.send(debrid_links).unwrap();
                     });
@@ -169,13 +242,29 @@ impl DebridUI {
             if let Ok(debrid_results) = receiver.try_recv() {
                 let mut links = String::new();
                 let mut errors = String::new();
-                for (index, link) in debrid_results.iter().enumerate() {
-                    match link {
-                        Ok(response) => {
-                            links = format!("{}{}\n", links, response.data.link);
-                        },
-                        Err(error) => {
-                            errors = format!("{}\n\n{} - {:?}", errors, self.input_links_vec[index], error);
+                for (index, response) in debrid_results.iter().enumerate() {
+                    match response {
+                        DebridResponse::AllDebrid(result) => {
+                            match result {
+                                Ok(response) => {
+                                    links = format!("{}{}\n", links, response.data.link);
+                                },
+                                Err(error) => {
+                                    errors = format!("{}\n\n{} - {:?}", errors, self.input_links_vec[index], error);
+                                }
+                            }
+
+                        }
+                        DebridResponse::RealDebrid(result) => {
+                            match result {
+                                Ok(response) => {
+                                    links = format!("{}{}\n", links, response.link);
+                                },
+                                Err(error) => {
+                                    errors = format!("{}\n\n{} - {:?}", errors, self.input_links_vec[index], error);
+                                }
+                            }
+                            
                         }
                     }
                 }
