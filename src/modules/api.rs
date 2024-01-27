@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crossbeam_channel::{Receiver, TryRecvError};
 use reqwest::{Client, multipart};
 use serde::Deserialize;
+use crate::modules::debrid::{DebridResponse, DebridService};
 use crate::modules::links::{DirectLink, DownloadLink, LinkError};
 
 /// Represents information about a MultiUp link from the MultiUp API.
@@ -289,7 +290,7 @@ pub struct AllDebridData {
     id: String,
     #[serde(rename = "hostDomain")]
     host_domain: Option<String>,
-    delayed: Option<u64>
+    delayed: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -304,25 +305,68 @@ pub struct AllDebridStream {
     // pub abr: Option<f64>,
 }
 
-pub async fn unlock_links(link: &str, api_key: &str, client: Client) -> Result<AllDebridResponse, LinkError> {
+#[derive(Debug, Deserialize)]
+pub struct RealDebridResponse {
+    id: String,
+    filename: String,
+    #[serde(rename = "mimeType")]
+    mime_type: String,
+    filesize: u64,
+    #[serde(rename = "link")]
+    original_link: String,
+    host: String,
+    chunks: u32,
+    crc: u32,
+    #[serde(rename = "download")]
+    pub link: String,
+    streamable: u32,
+}
+
+pub async fn unlock_links(link: &str, debrid_service: DebridService, api_key: &str, client: Client) -> DebridResponse {
+    match debrid_service {
+        DebridService::AllDebrid => {
+            DebridResponse::AllDebrid(unlock_link_with_all_debrid(link, api_key, client).await)
+        }
+        DebridService::RealDebrid => {
+            DebridResponse::RealDebrid(unlock_link_with_real_debrid(link, api_key, client).await)
+        }
+    }
+}
+
+async fn unlock_link_with_all_debrid(link: &str, api_key: &str, client: Client) -> Result<AllDebridResponse, LinkError> {
     let query = format!("https://api.alldebrid.com/v4/link/unlock?agent=MultiUp-Direct&apikey={}&link={}", api_key, link);
     match client.get(query).send().await {
         Ok(response) => match response.json::<AllDebridResponse>().await {
-            Ok(data) => Ok(data),
+            Ok(debrid_response) => Ok(debrid_response),
             Err(error) => Err(LinkError::APIError(error.to_string())),
         },
         Err(error) => Err(LinkError::Reqwest(error))
     }
 }
 
-#[tokio::test]
-async fn test_unlock_links() {
-    // "https://api.alldebrid.com/v4/link/unlock?agent=MultiUp-Direct&apikey=exPWXN1xUDzEm5CwYU9D&link=https://1fichier.com/?jgmylyaet2btcy3jp5gi"
-    let client = Client::new();
-    let link = "https://alldebrid.com/link/1234567890";
-    let api_key = "1234567890";
-    match unlock_links(link, api_key, client).await {
-        Ok(response) => { println!("{:?}", response) }
-        Err(error) => { eprintln!("{:?}", error) }
+async fn unlock_link_with_real_debrid(link: &str, api_key: &str, client: Client) -> Result<RealDebridResponse, LinkError> {
+    let query = format!("https://api.real-debrid.com/rest/1.0/unrestrict/link?auth_token={}", api_key);
+    let mut params = HashMap::new();
+    params.insert("link", link);
+    // params.insert("remote", "1");
+    match client.post(query)
+        .form(&params)
+        .send().await {
+        Ok(response) => {
+            match response.json::<RealDebridResponse>().await {
+                Ok(debrid_response) => Ok(debrid_response),
+                Err(error) => Err(LinkError::APIError(error.to_string()))
+            }
+        },
+        Err(error) => Err(LinkError::Reqwest(error))
     }
+}
+
+#[tokio::test]
+async fn test_unlock_link_with_real_debrid() {
+    let client = Client::new();
+    let link = "https://1fichier.com/?y7fuspjxp20btfvpyqt9&af=62851";
+    let api_key = "OJERNPSFHWXGS54YWU77J2URGLVEDJZ7DCZI6OPXBRKXCCOWVKYA";
+    let result = unlock_link_with_real_debrid(link, api_key, client).await;
+    println!("{:?}", result);
 }
