@@ -94,7 +94,6 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
 pub struct Login {
     pub username: String,
     pub password: String,
-    pub user_id: String
 }
 
 impl Login {

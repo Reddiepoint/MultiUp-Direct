@@ -32,6 +32,7 @@ struct Channels {
 
 #[derive(Default, PartialEq)]
 pub enum UploadType {
+    Disk,
     #[default]
     Remote,
 }
@@ -87,7 +88,8 @@ impl UploadUI {
         upload_ui.display_login_window(ctx);
         upload_ui.display_upload_types(ui);
         match upload_ui.upload_type {
-            UploadType::Remote => upload_ui.display_remote_upload_ui(ui)
+            UploadType::Disk => todo!(),
+            UploadType::Remote => upload_ui.display_remote_upload_ui(ui),
         };
         upload_ui.toasts.show(ctx);
     }
@@ -152,7 +154,7 @@ impl UploadUI {
         }
         ui.horizontal(|ui| {
             ui.label(format!("Logged in as: {}", user));
-            let login_text = if !self.login_details.user_id.is_empty() || self.login_response.user.is_some() {
+            let login_text = if self.login_response.user.is_some() {
                 "Change user"
             } else {
                 "Login"
@@ -165,9 +167,8 @@ impl UploadUI {
     }
 
     fn display_login_window(&mut self, ctx: &Context) {
-        let mut open = self.show_login_window;
         Window::new("Login").open(&mut self.show_login_window).show(ctx, |ui| {
-            ui.heading("Please log in or enter your user ID");
+            ui.heading("Please log into your MultiUp account");
 
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
@@ -197,49 +198,19 @@ impl UploadUI {
                         });
                     }
                 });
-
-                ui.separator();
-
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("User ID:");
-                        ui.text_edit_singleline(&mut self.login_details.user_id);
-                    });
-                    if ui.button("Login").clicked() {
-                        let id = match self.login_details.user_id.trim().parse::<u64>() {
-                            Ok(id) => Some(id),
-                            Err(_) => {
-                                self.toasts.add(Toast {
-                                    text: "Invalid ID".into(),
-                                    kind: ToastKind::Error,
-                                    options: ToastOptions::default()
-                                        .duration_in_seconds(5.0)
-                                        .show_progress(true)
-                                        .show_icon(true)
-                                });
-
-                                None
-                            }
-                        };
-                        self.login_response.user = id;
-                        // self.show_login_window = false;
-                        open = false;
-                    }
-                });
             });
         });
-        if !open {
-            self.show_login_window = false;
-        }
     }
     fn display_upload_types(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.label("Choose upload type:");
             ComboBox::from_id_source("Upload Type")
                 .selected_text(match self.upload_type {
+                    UploadType::Disk => "Disk Upload",
                     UploadType::Remote => "Remote Upload",
                 })
                 .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.upload_type, UploadType::Disk, "Disk Upload");
                     ui.selectable_value(&mut self.upload_type, UploadType::Remote, "Remote Upload");
                 });
         });
@@ -366,7 +337,6 @@ impl UploadUI {
                     details.selected = false;
                 }
             }
-
         });
 
         ui.columns(5, |columns| {
