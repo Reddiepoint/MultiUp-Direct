@@ -109,7 +109,7 @@ impl DebridUI {
                                                     .show_icon(true)
                                             });
                                         }
-                                    }
+                                    },
                                     DebridService::RealDebrid => {
                                         if self.api_key.real_debrid.is_empty() {
                                             self.toasts.add(Toast {
@@ -123,6 +123,7 @@ impl DebridUI {
                                         }
                                     }
                                 }
+
                                 self.toasts.add(Toast {
                                     text: "Successfully read API key".into(),
                                     kind: ToastKind::Success,
@@ -253,7 +254,6 @@ impl DebridUI {
                                     errors = format!("{}\n\n{} - {:?}", errors, self.input_links_vec[index], error);
                                 }
                             }
-
                         }
                         DebridResponse::RealDebrid(result) => {
                             match result {
@@ -264,7 +264,6 @@ impl DebridUI {
                                     errors = format!("{}\n\n{} - {:?}", errors, self.input_links_vec[index], error);
                                 }
                             }
-                            
                         }
                     }
                 }
