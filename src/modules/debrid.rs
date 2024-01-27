@@ -1,7 +1,8 @@
 use std::{fs, thread};
 use std::sync::OnceLock;
 use crossbeam_channel::Receiver;
-use eframe::egui::{Align2, ComboBox, Context, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui;
+use eframe::egui::{Align2, ComboBox, Context, Id, ScrollArea, TextEdit, Ui, Window};
 use eframe::egui::Direction::TopDown;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use regex::Regex;
@@ -42,6 +43,7 @@ pub struct DebridUI {
     channels: Channels,
     debrid_service: DebridService,
     api_key: DebridAPIKeys,
+    use_remote_traffic: bool,
     input_links: String,
     input_links_vec: Vec<String>,
     unlocking: bool,
@@ -174,6 +176,19 @@ impl DebridUI {
                 );
             });
 
+        if self.debrid_service == DebridService::RealDebrid {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.use_remote_traffic, "Use remote traffic");
+
+                if ui.label("(?)").hovered() {
+                    egui::show_tooltip(ui.ctx(), Id::new("Use Remote Traffic Tooltip"), |ui| {
+                        ui.label("Generates RealDebrid links that do not have remote dedicated servers and account sharing protections. \
+                    These links can be uploaded directly using remote upload or shared with others.\nImportantly, this uses your \
+                    \"remote traffic\" quota, which may incur extra costs.");
+                    });
+                };
+            });
+        }
 
         ui.horizontal(|ui| {
             if ui.button("Unlock links").clicked() {
@@ -187,6 +202,7 @@ impl DebridUI {
                     DebridService::AllDebrid => self.api_key.all_debrid.clone(),
                     DebridService::RealDebrid => self.api_key.real_debrid.clone()
                 };
+                let use_remote_traffic = self.use_remote_traffic;
                 let rt = Runtime::new().unwrap();
                 thread::spawn(move || {
                     rt.block_on(async {
@@ -198,7 +214,7 @@ impl DebridUI {
                             let api_key = api_key.clone();
                             let client = client.clone();
                             let task = tokio::spawn(async move {
-                                unlock_links(&link, debrid_service, &api_key, client).await
+                                unlock_links(&link, debrid_service, &api_key, use_remote_traffic, client).await
                             });
                             tasks.push(task);
                         }

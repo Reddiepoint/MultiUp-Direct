@@ -1,6 +1,6 @@
 [package]
-name = "MultiUp_Direct_3_0_0"
-version = "3.0.0"
+name = "MultiUp_Direct"
+version = "3.0.0-alpha"
 authors = ["Redpoint"]
 edition = "2021"
 
@@ -9,6 +9,7 @@ edition = "2021"
 [profile.release]
 codegen-units = 1
 lto = "fat"
+opt-level = "s"
 #debug = true
 
 
