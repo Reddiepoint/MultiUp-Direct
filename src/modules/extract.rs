@@ -47,9 +47,8 @@ pub struct ExtractUI {
     search_filter: String,
     filter: FilterMenu,
     selection: (Option<usize>, Option<usize>),
-    visible_links: Vec<String>,
     selected_links: HashSet<String>,
-    direct_links: HashSet<String>
+    direct_links: Vec<String>
 }
 
 impl ExtractUI {
@@ -263,8 +262,7 @@ impl ExtractUI {
         });
 
         let height = ui.available_height();
-        self.visible_links = vec![];
-        self.direct_links = HashSet::new();
+        self.direct_links = Vec::new();
         let mut url_labels = vec![];
         ui.horizontal(|ui| {
             ui.set_height(height);
@@ -281,7 +279,7 @@ impl ExtractUI {
                                         for link in project.download_links.as_ref().unwrap() {
                                             let filtered_links = self.filter.filter_links(link);
                                             for link in filtered_links {
-                                                self.direct_links.insert(link);
+                                                self.direct_links.push(link);
                                             }
                                         }
                                         CollapsingHeader::new(&project.name)
@@ -314,38 +312,21 @@ impl ExtractUI {
                                                                 if let Some(date_upload) = &information.date_upload {
                                                                     display_information += format!(" | Uploaded on {}", date_upload).as_str();
                                                                 }
+                                                                let filtered_links = self.filter.filter_links(link);
                                                                 if searched {
                                                                     row.col(|ui| {
                                                                         CollapsingHeader::new(&display_information).id_source(&link.link_id).default_open(true).show(ui, |ui| {
-                                                                            let filtered_links = self.filter.filter_links(link);
                                                                             for link in &filtered_links {
-                                                                                self.visible_links.push(link.clone());
                                                                                 let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                                                if url_label.hovered() || self.selected_links.contains(link) {
-                                                                                    url_label.clone().highlight();
-                                                                                }
-                                                                                if url_label.clicked() {
-                                                                                    let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                                    if control_is_down {
-                                                                                        if !self.selected_links.remove(link.as_str()) {
-                                                                                            self.selected_links.insert(link.clone());
-                                                                                        };
-                                                                                        self.selection = (None, None);
-                                                                                    } else if shift_is_down {
-                                                                                        if self.selection.0.is_none() {
-                                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                        } else {
-                                                                                            self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                        };
-                                                                                    } else {
-                                                                                        self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                                    }
-                                                                                }
 
                                                                                 url_labels.push((url_label, link.clone()));
                                                                             }
                                                                         });
                                                                     });
+                                                                }
+
+                                                                for link in filtered_links {
+                                                                    self.direct_links.push(link);
                                                                 }
                                                             }
                                                         });
@@ -383,28 +364,7 @@ impl ExtractUI {
                                                         row.col(|ui| {
                                                             CollapsingHeader::new(&display_information).id_source(&download.link_id).default_open(true).show(ui, |ui| {
                                                                 for link in &filtered_links {
-                                                                    self.visible_links.push(link.clone());
                                                                     let url_label = ui.add(Label::new(link).sense(Sense::click()));
-                                                                    if url_label.hovered() || self.selected_links.contains(link) {
-                                                                        url_label.clone().highlight();
-                                                                    }
-                                                                    if url_label.clicked() {
-                                                                        let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
-                                                                        if control_is_down {
-                                                                            if !self.selected_links.remove(link.as_str()) {
-                                                                                self.selected_links.insert(link.clone());
-                                                                            };
-                                                                            self.selection = (None, None);
-                                                                        } else if shift_is_down {
-                                                                            if self.selection.0.is_none() {
-                                                                                self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                            } else {
-                                                                                self.selection.1 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                            };
-                                                                        } else {
-                                                                            self.selection.0 = Some(self.visible_links.iter().position(|url| url == link).unwrap());
-                                                                        }
-                                                                    }
 
                                                                     url_labels.push((url_label, link.clone()))
                                                                 }
@@ -413,8 +373,9 @@ impl ExtractUI {
                                                     });
                                                 });
                                             });
+
                                             for link in filtered_links {
-                                                self.direct_links.insert(link);
+                                                self.direct_links.push(link);
                                             }
                                         }
                                     }
@@ -432,7 +393,7 @@ impl ExtractUI {
         }
 
         if let (Some(index_1), Some(index_2)) = self.selection {
-            self.visible_links[index_1..=index_2].iter().for_each(|url| { self.selected_links.insert(url.clone()); });
+            self.direct_links[index_1..=index_2].iter().for_each(|url| { self.selected_links.insert(url.clone()); });
             if ui.ctx().input(|ui| !ui.modifiers.shift) {
                 self.selection = (None, None);
             }
@@ -449,6 +410,29 @@ impl ExtractUI {
 
 
         for (url_label, link) in url_labels {
+            if url_label.hovered() || self.selected_links.contains(&link) {
+                url_label.clone().highlight();
+            }
+
+            if url_label.clicked() {
+                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                if control_is_down {
+                    if !self.selected_links.remove(link.as_str()) {
+                        self.selected_links.insert(link.clone());
+                    };
+                    self.selection = (None, None);
+                } else if shift_is_down {
+                    if self.selection.0.is_none() {
+                        self.selection.0 = Some(self.direct_links.iter().position(|url| url == &link).unwrap());
+                    } else {
+                        self.selection.1 = Some(self.direct_links.iter().position(|url| url == &link).unwrap());
+                    };
+                } else {
+                    self.selection.0 = Some(self.direct_links.iter().position(|url| url == &link).unwrap());
+                    self.selection.1 = None;
+                }
+            }
+
             url_label.context_menu(|ui| {
                 if ui.button("Copy link").clicked() {
                     ui.output_mut(|output| output.copied_text = link.to_string());
