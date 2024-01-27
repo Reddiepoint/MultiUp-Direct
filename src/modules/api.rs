@@ -95,6 +95,7 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
 pub struct Login {
     pub username: String,
     pub password: String,
+    pub user_id: Option<String>
 }
 
 impl Login {
@@ -108,7 +109,7 @@ impl Login {
             .send().await {
             Ok(response) => {
                 match response.json::<LoginResponse>().await {
-                    Ok(login_response) => Ok(login_response),
+                    Ok(login_response) => { Ok(login_response) },
                     Err(error) => {
                         Err(LinkError::APIError(error.to_string()))
                     }
@@ -153,8 +154,13 @@ pub async fn get_fastest_server() -> Result<String, LinkError> {
     }
 }
 
+pub enum MultiUpUploadResponses {
+    MultiUpFileUpload(Result<MultiUpFileUploadResponse, LinkError>),
+    MultiUpRemoteUpload(Result<MultiUpRemoteUploadResponse, LinkError>)
+}
+
 #[derive(Debug, Deserialize)]
-pub struct MultiUpUploadResponse {
+pub struct MultiUpFileUploadResponse {
     pub files: Vec<UploadedFileDetails>,
     #[serde(skip)]
     pub project_hash: Option<String>,
@@ -172,6 +178,17 @@ pub struct UploadedFileDetails {
     pub user: Option<String>,
     pub delete_url: Option<String>,
     pub delete_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MultiUpRemoteUploadResponse {
+    pub error: String,
+    pub link: Option<String>,
+    pub size: Option<String>,
+    #[serde(rename = "fileName")]
+    pub file_name: Option<String>,
+    #[serde(skip)]
+    pub project_hash: Option<String>
 }
 
 #[derive(Debug)]
@@ -322,13 +339,13 @@ pub struct RealDebridResponse {
     streamable: u32,
 }
 
-pub async fn unlock_links(link: &str, debrid_service: DebridService, api_key: &str, client: Client) -> DebridResponse {
+pub async fn unlock_links(link: &str, debrid_service: DebridService, api_key: &str, use_remote_traffic: bool, client: Client) -> DebridResponse {
     match debrid_service {
         DebridService::AllDebrid => {
             DebridResponse::AllDebrid(unlock_link_with_all_debrid(link, api_key, client).await)
         }
         DebridService::RealDebrid => {
-            DebridResponse::RealDebrid(unlock_link_with_real_debrid(link, api_key, client).await)
+            DebridResponse::RealDebrid(unlock_link_with_real_debrid(link, api_key, use_remote_traffic, client).await)
         }
     }
 }
@@ -344,11 +361,13 @@ async fn unlock_link_with_all_debrid(link: &str, api_key: &str, client: Client) 
     }
 }
 
-async fn unlock_link_with_real_debrid(link: &str, api_key: &str, client: Client) -> Result<RealDebridResponse, LinkError> {
+async fn unlock_link_with_real_debrid(link: &str, api_key: &str, use_remote_traffic: bool, client: Client) -> Result<RealDebridResponse, LinkError> {
     let query = format!("https://api.real-debrid.com/rest/1.0/unrestrict/link?auth_token={}", api_key);
     let mut params = HashMap::new();
     params.insert("link", link);
-    // params.insert("remote", "1");
+    if use_remote_traffic {
+        params.insert("remote", "1");
+    }
     match client.post(query)
         .form(&params)
         .send().await {
@@ -367,6 +386,6 @@ async fn test_unlock_link_with_real_debrid() {
     let client = Client::new();
     let link = "https://1fichier.com/?y7fuspjxp20btfvpyqt9&af=62851";
     let api_key = "KEY";
-    let result = unlock_link_with_real_debrid(link, api_key, client).await;
+    let result = unlock_link_with_real_debrid(link, api_key, false, client).await;
     println!("{:?}", result);
 }
