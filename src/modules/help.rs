@@ -32,7 +32,7 @@ static VERSION_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static CHANGELOG_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
-const WIKI: &str = "";
+const DOCUMENTATION: &str = "";
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -45,7 +45,7 @@ impl HelpUI {
     pub fn show_help(ctx: &Context, help_ui: &mut HelpUI) {
         Window::new("Help").open(&mut help_ui.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.hyperlink_to("Wiki", WIKI);
+                ui.hyperlink_to("Documentation", DOCUMENTATION);
                 ui.label("|");
                 ui.hyperlink_to("Homepage", HOMEPAGE);
             });
