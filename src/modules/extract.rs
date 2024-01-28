@@ -113,7 +113,8 @@ impl ExtractUI {
             if self.currently_extracting {
                 ui.spinner();
                 ui.label("Extracting links...");
-                if ui.button("Cancel now").clicked() {
+                let cancel_button = ui.add_enabled(self.channels.cancel.is_some(), Button::new("Cancel now"));
+                if cancel_button.clicked() {
                     if let Some(sender) = &self.channels.cancel {
                         let _ = sender.send(true);
                         self.channels.cancel.take();
