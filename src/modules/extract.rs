@@ -692,7 +692,7 @@ static MULTIUP_REGEX: OnceLock<Regex> = OnceLock::new();
 pub fn create_regexes() -> (Regex, Regex, Regex, Regex) {
     // All MultiUp links
     let multiup_regex = MULTIUP_REGEX
-        .get_or_init(|| Regex::new(r"(https?://(www\.)?multiup\.(org|io)/\S+)").unwrap());
+        .get_or_init(|| Regex::new(r#"https?://(www\.)?multiup\.(org|io)/[^"\s<]*"#).unwrap());
 
     // Download links
     let download_regex = DOWNLOAD_REGEX.get_or_init(|| {
