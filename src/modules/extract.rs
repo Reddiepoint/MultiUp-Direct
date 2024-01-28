@@ -701,7 +701,7 @@ pub fn create_regexes() -> (Regex, Regex, Regex, Regex) {
 
     // Mirror links
     let mirror_regex = MIRROR_REGEX.get_or_init(|| {
-        Regex::new(r"https?://multiup\.(org|io)/en/mirror/").unwrap()
+        Regex::new(r"https?://multiup\.(org|io)/(en|fr)/mirror/").unwrap()
     });
 
     // Project links
