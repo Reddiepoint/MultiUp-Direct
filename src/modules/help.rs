@@ -81,27 +81,6 @@ impl HelpUI {
             Since this is an experimental feature, be careful when uploading large files.\n\
             Data streaming essentially downloads and uploads chunks of data, as if the file was downloaded \
             to disk and then uploaded to MultiUp. However, in this case, the data is not written to disk.");
-// ui.label("Instructions:\n\
-// 1. Paste your MultiUp links into the first box.\n\
-// You can paste as many links as you want and you can paste a page with links (e.g., FitGirl). \
-// Duplicate links will also be filtered out.\n\n\
-// 2. You can check the \"Recheck link validity\" box if you want MultiUp to verify the validity of the hosts.\n\
-// Note that enabling this feature will cause the generation times to be much longer, \
-// since each host is checked individually.\n\n\
-// 3. Click on \"Generate links\" to get the direct links.\n\
-// Click the \"Cancel now\" button to cancel any remaining links. You may not see any immediate feedback, \
-// but this is normal, as MultiUp Direct waits for the links that have already been extracted, \
-// but no new links will be extracted.\n\n\
-// 4. Select the links you want to use. You can do this by:\n\t\
-// - Holding down CTRL to select individual links.\n\t\
-// - Clicking and holding SHIFT to select a range of links.\n\n\
-// 5. Right-click on a link or selection of links to see more options, such as copying or opening the links in your browser.\n\n\
-// 6. Use the filter menu to narrow down your choices:\n\t\
-// - \"Unknown\": These are the links that MultiUp could not check after verification.\n\t\
-// - \"Unchecked\": These are the links that were not verified by MultiUp. (Links will only appear here if you \
-// do not check the \"Recheck link validity\" box).\n\t\
-// - Hosts: You can choose which hosts you want to see links for. You can right-click on a host and select \"Select ____ links only\" to quickly filter out the rest.\n\n\
-// ");
         }));
     }
 
@@ -144,7 +123,8 @@ impl HelpUI {
                 UpdateStatus::Updated => {}
                 UpdateStatus::Checking => {
                     if let Ok((latest_version, changelog)) = help_ui.update_receiver.clone().unwrap().try_recv() {
-                        let app_version: Vec<u32> = VERSION.split('.').map(|s| s.parse().unwrap()).collect();
+                        let version = VERSION.split('-').next().unwrap().to_string();
+                        let app_version: Vec<u32> = version.split('.').map(|s| s.parse().unwrap()).collect();
                         let homepage_version: Vec<u32> = latest_version.split('.').map(|s| s.parse().unwrap()).collect();
                         match app_version.cmp(&homepage_version) {
                             Ordering::Less => help_ui.update_status = UpdateStatus::Outdated,

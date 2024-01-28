@@ -1,6 +1,6 @@
 [package]
 name = "MultiUp_Direct"
-version = "3.0.0-alpha"
+version = "3.0.0-beta"
 authors = ["Redpoint"]
 edition = "2021"
 
