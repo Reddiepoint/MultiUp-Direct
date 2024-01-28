@@ -597,7 +597,7 @@ async fn remote_upload_files(urls: &[String], file_names: &[String], login: Logi
                         responses.push(MultiUpUploadResponses::MultiUpRemoteUpload(Ok(response)));
                     },
                     _ => {
-                        eprintln!("{}", response.error);
+                        // eprintln!("{}", response.error);
                         let result = stream_file(&[url.to_string()],
                                                  &[file_names.get(index).unwrap_or(&"".to_string()).to_string()],
                                                  login.user_id.clone(),
