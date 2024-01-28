@@ -239,15 +239,6 @@ impl AddProject {
     }
 }
 
-#[tokio::test]
-async fn test_add_project() {
-    let project = AddProject::new("This is a project name".to_string(), Some("123456".to_string()), Some("This is a description".to_string()), Some("1".to_string()));
-    match project.add_project().await {
-        Ok(response) => { println!("{:?}", response) }
-        Err(error) => { eprintln!("{:?}", error) }
-    }
-}
-
 #[derive(Debug, Deserialize)]
 pub struct AddProjectResponse {
     pub error: String,
@@ -379,13 +370,4 @@ async fn unlock_link_with_real_debrid(link: &str, api_key: &str, use_remote_traf
         },
         Err(error) => Err(LinkError::Reqwest(error))
     }
-}
-
-#[tokio::test]
-async fn test_unlock_link_with_real_debrid() {
-    let client = Client::new();
-    let link = "https://1fichier.com/?y7fuspjxp20btfvpyqt9&af=62851";
-    let api_key = "KEY";
-    let result = unlock_link_with_real_debrid(link, api_key, false, client).await;
-    println!("{:?}", result);
 }
