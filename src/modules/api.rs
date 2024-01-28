@@ -21,7 +21,7 @@ pub struct MultiUpLinkInformation {
     pub date_last_download: Option<String>,
     pub number_downloads: Option<u64>,
     pub description: Option<String>,
-    pub hosts: Option<HashMap<String, String>>,
+    pub hosts: Option<HashMap<String, Option<String>>>,
 }
 
 impl MultiUpLinkInformation {
@@ -76,7 +76,7 @@ pub async fn recheck_validity_api(mirror_link: String, mut download_link: Downlo
     if let Some(information) = &information.hosts {
         for (host, validity) in information {
             if let Some(direct_links) = &download_link.direct_links {
-                let mut new_direct_link = DirectLink::new(host.clone(), String::new(), validity.clone());
+                let mut new_direct_link = DirectLink::new(host.clone(), String::new(), validity.clone().unwrap_or("Unknown".to_string()));
                 let original_direct_link = direct_links.get(&new_direct_link);
                 if let Some(link) = original_direct_link {
                     new_direct_link.url = link.url.clone();

@@ -232,8 +232,6 @@ impl ExtractUI {
             if ui.button("See errors").clicked() {
                 self.error_log_open = true;
             }
-
-
         });
     }
 
@@ -833,7 +831,7 @@ fn process_non_project_link(link: &str, regex: &Regex) -> DownloadLink {
 
 async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> Vec<MultiUpLink> {
     // At the beginning of the function
-    let semaphore = Arc::new(Semaphore::new(200));
+    let semaphore = Arc::new(Semaphore::new(100));
     let mut tasks = Vec::new();
     let client = Client::new();
     for link in multiup_links {
@@ -906,10 +904,11 @@ const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 
 async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client) -> DownloadLink {
     let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
+    let download_link = process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await;
     if recheck_validity {
         recheck_validity_api(mirror_link, download_link, cancel_receiver, client).await
     } else {
-        process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await
+        download_link
     }
 }
 
