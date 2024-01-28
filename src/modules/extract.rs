@@ -127,6 +127,52 @@ impl ExtractUI {
                     self.currently_extracting = false;
                     self.shown_toast = false;
                     self.filter.update_hosts(&self.completed_links);
+
+                    // Update error log
+                    let mut errors = String::new();
+                    for link in self.completed_links.iter() {
+                        match link {
+                            MultiUpLink::Project(project) => {
+                                match &project.status {
+                                    Some(status) => {
+                                        match status {
+                                            Ok(_) => {
+                                                for link in project.download_links.as_ref().unwrap() {
+                                                    if link.status.as_ref().is_none() {
+                                                        errors = format!("{}\n\n{} - {}", errors, &link.original_link, "Unknown");
+                                                    } else if let Err(error) = link.status.as_ref().unwrap() {
+                                                        errors = format!("{}\n\n{} - {:?}", errors, &link.original_link, error);
+                                                    }
+                                                }
+                                            }
+                                            Err(error) => {
+                                                errors = format!("{}\n\n{} - {:?}", errors, &project.original_link, error);
+                                            }
+                                        }
+                                    }
+                                    None => {
+                                        errors = format!("{}\n\n{} - {}", errors, &project.original_link, "Unknown");
+                                    }
+                                }
+                            }
+                            MultiUpLink::Download(download) => {
+                                match &download.status {
+                                    Some(status) => {
+                                        match status {
+                                            Ok(_) => {},
+                                            Err(error) => {
+                                                errors = format!("{}\n\n{} - {:?}", errors, &download.original_link, error);
+                                            }
+                                        }
+                                    },
+                                    None => {
+                                        errors = format!("{}\n\n{} - {}", errors, &download.original_link, "Unknown");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.error_log_text = errors;
                 }
             }
 
@@ -184,52 +230,10 @@ impl ExtractUI {
 
 
             if ui.button("See errors").clicked() {
-                let mut errors = String::new();
-                for link in self.completed_links.iter() {
-                    match link {
-                        MultiUpLink::Project(project) => {
-                            match &project.status {
-                                Some(status) => {
-                                    match status {
-                                        Ok(_) => {
-                                            for link in project.download_links.as_ref().unwrap() {
-                                                if link.status.as_ref().is_none() {
-                                                    errors = format!("{}\n\n{} - {}", errors, &link.original_link, "Unknown");
-                                                } else if let Err(error) = link.status.as_ref().unwrap() {
-                                                    errors = format!("{}\n\n{} - {:?}", errors, &link.original_link, error);
-                                                }
-                                            }
-                                        }
-                                        Err(error) => {
-                                            errors = format!("{}\n\n{} - {:?}", errors, &project.original_link, error);
-                                        }
-                                    }
-                                }
-                                None => {
-                                    errors = format!("{}\n\n{} - {}", errors, &project.original_link, "Unknown");
-                                }
-                            }
-                        }
-                        MultiUpLink::Download(download) => {
-                            match &download.status {
-                                Some(status) => {
-                                    match status {
-                                        Ok(_) => {},
-                                        Err(error) => {
-                                            errors = format!("{}\n\n{} - {:?}", errors, &download.original_link, error);
-                                        }
-                                    }
-                                },
-                                None => {
-                                    errors = format!("{}\n\n{} - {}", errors, &download.original_link, "Unknown");
-                                }
-                            }
-                        }
-                    }
-                }
-                self.error_log_text = errors;
                 self.error_log_open = true;
             }
+
+
         });
     }
 
