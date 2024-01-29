@@ -45,7 +45,7 @@ impl HelpUI {
     pub fn show_help(ctx: &Context, help_ui: &mut HelpUI) {
         Window::new("Help").open(&mut help_ui.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.hyperlink_to("Documentation", DOCUMENTATION);
+                ui.hyperlink_to("Tips & Tricks and Extra Information", DOCUMENTATION);
                 ui.label("|");
                 ui.hyperlink_to("Homepage", HOMEPAGE);
             });
@@ -61,13 +61,13 @@ impl HelpUI {
             ui.separator();
 
             ui.heading("Debrid");
-            ui.label("Unlocks links using a Debrid service.\n\
+            ui.label("Unlocks links using a Debrid service.\n\n\
             Currently supports AllDebrid and RealDebrid.\n\
             To read the keys from a file, create \"api_key.json\" in the same directory as this app with the following structure:");
             let mut json_example = "\
             {\n\
-                \"all_debrid\": \"YOUR_ALLDEBRID_API_KEY\",\n\
-                \"real_debrid\": \"YOUR_REALDEBRID_API_KEY\"\n\
+                \t\"all_debrid\": \"YOUR_ALLDEBRID_API_KEY\",\n\
+                \t\"real_debrid\": \"YOUR_REALDEBRID_API_KEY\"\n\
             }";
             ui.code_editor(&mut json_example);
             ui.label("You can choose to omit any field here (i.e. only have all_debrid or real_debrid) \
