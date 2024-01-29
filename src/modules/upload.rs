@@ -418,6 +418,7 @@ impl UploadUI {
                             UploadType::Remote => {
                                 let (urls, file_names) = process_urls_and_names(&remote_upload_settings.upload_links, &remote_upload_settings.file_names);
                                 let project_hash = get_project_hash(&remote_upload_settings.project_settings, login.user_id.clone(), upload_sender.clone()).await;
+                                println!("{:?}", project_hash.clone());
                                 let response = if remote_upload_settings.force_data_streaming {
                                     vec![MultiUpUploadResponses::MultiUpFileUpload(stream_file(&urls, &file_names, login.user_id, remote_upload_settings.hosts, project_hash.clone()).await)]
                                 } else {
@@ -494,6 +495,10 @@ impl UploadUI {
                                         if let Some(link) = response.link {
                                             multiup_links.push(link);
                                         }
+
+                                        if let Some(hash) = response.project_hash {
+                                            project_hash = hash;
+                                        }
                                     },
                                     _ => {
                                         multiup_links.push(format!("{:?}", response.error));
@@ -523,17 +528,17 @@ fn process_urls_and_names(urls: &str, names: &str) -> (Vec<String>, Vec<String>)
 }
 
 async fn get_project_hash(project_settings: &ProjectSettings, user: Option<String>, upload_sender: Sender<Vec<MultiUpUploadResponses>>) -> Option<String> {
-    let password = if !project_settings.password.is_empty() {
-        Some(project_settings.password.clone())
-    } else {
-        None
-    };
-    let description = if !project_settings.description.is_empty() {
-        Some(project_settings.description.clone())
-    } else {
-        None
-    };
     if project_settings.is_project {
+        let password = if !project_settings.password.is_empty() {
+            Some(project_settings.password.clone())
+        } else {
+            None
+        };
+        let description = if !project_settings.description.is_empty() {
+            Some(project_settings.description.clone())
+        } else {
+            None
+        };
         let project = AddProject::new(
             project_settings.name.clone(),
             password,
@@ -583,7 +588,10 @@ async fn remote_upload_files(urls: &[String], file_names: &[String], login: Logi
             .send().await {
             Ok(response) => {
                 match response.json::<MultiUpRemoteUploadResponse>().await {
-                    Ok(upload_response) => Ok(upload_response),
+                    Ok(mut upload_response) => {
+                        upload_response.project_hash = project_hash.clone();
+                        Ok(upload_response)
+                    },
                     Err(error) => Err(LinkError::APIError(error.to_string()))
                 }
             },
@@ -687,7 +695,7 @@ async fn stream_file(download_urls: &[String], file_names: &[String], user_id: O
         form = form.text("user", id);
     }
 
-    if let Some(hash) = project_hash {
+    if let Some(hash) = project_hash.clone() {
         form = form.text("project-hash", hash);
     }
 
@@ -714,7 +722,10 @@ async fn stream_file(download_urls: &[String], file_names: &[String], user_id: O
 
     // Output the response body for the upload
     let upload_response = match response.json::<MultiUpFileUploadResponse>().await {
-        Ok(response) => response,
+        Ok(mut response) => {
+            response.project_hash = project_hash;
+            response
+        },
         Err(error) => return Err(LinkError::APIError(error.to_string()))
     };
     // match upload_response.files.is_empty() {

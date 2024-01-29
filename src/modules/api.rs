@@ -206,7 +206,6 @@ impl AddProject {
 
     pub async fn add_project(&self) -> Result<AddProjectResponse, LinkError> {
         let client = Client::new();
-        // println!("{:?}", self);
         let mut params = HashMap::new();
         params.insert("name", self.name.clone());
         if let Some(password) = &self.password {
