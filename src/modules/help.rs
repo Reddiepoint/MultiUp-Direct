@@ -32,7 +32,7 @@ static VERSION_SELECTOR: OnceLock<Selector> = OnceLock::new();
 static CHANGELOG_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
-const DOCUMENTATION: &str = "";
+const DOCUMENTATION: &str = "https://reddiepoint.github.io/MultiUp-Direct-Documentation/";
 
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
