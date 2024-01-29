@@ -673,8 +673,11 @@ async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bo
     }
 
     let project_links = futures::future::join_all(project_processing_tasks).await;
-    for link in project_links {
-        processed_links.append(&mut vec![link.unwrap()])
+    for result in project_links {
+        let link = result.unwrap();
+        if !processed_links.contains(&link) {
+            processed_links.push(link)
+        }
     }
 
     processed_links
