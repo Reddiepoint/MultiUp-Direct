@@ -281,7 +281,7 @@ impl UploadUI {
                         .desired_width(half_width));
 
                     ui.add(TextEdit::multiline(&mut self.remote_upload_settings.file_names)
-                        .hint_text("Enter custom file names (optional). The name should match the same line as order as the URLs. \
+                        .hint_text("Enter custom file names (optional). The name should match the same order as the URLs. \
                         Leave a newline to use the default names.")
                         .desired_width(half_width));
                 });
