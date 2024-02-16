@@ -1,12 +1,17 @@
 use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use reqwest::{Client, multipart};
 use std::thread;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, Id, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, FontFamily, FontId, Id, ScrollArea, TextEdit, TextStyle, Ui, Window};
 use eframe::egui::Direction::TopDown;
+use egui_file::FileDialog;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
+use tokio::io::AsyncReadExt;
 use tokio::runtime::Runtime;
+use tokio_util::codec::{BytesCodec, FramedRead};
 use crate::modules::api::{AddProject, AvailableHosts, get_fastest_server, Login, LoginResponse, MultiUpFileUploadResponse, MultiUpRemoteUploadResponse, MultiUpUploadResponses, UploadedFileDetails};
 use crate::modules::links::LinkError;
 
@@ -30,9 +35,9 @@ struct Channels {
 //     }
 // }
 
-#[derive(Default, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub enum UploadType {
-    // Disk,
+    Disk,
     #[default]
     Remote,
 }
@@ -71,8 +76,8 @@ impl Default for RemoteUploadSettings {
 #[derive(Clone, Default)]
 pub struct DiskUploadSettings {
     project_settings: ProjectSettings,
-    file_paths: Vec<String>,
-    file_names: String,
+    file_paths: Vec<PathBuf>,
+    file_names: Vec<String>,
     hosts: HashSet<String>
 }
 
@@ -85,6 +90,7 @@ pub struct UploadUI {
     login_response: LoginResponse,
     upload_type: UploadType,
     disk_upload_settings: DiskUploadSettings,
+    open_file_dialogue: Option<FileDialog>,
     remote_upload_settings: RemoteUploadSettings,
     hosts: AvailableHosts,
     uploading: bool,
@@ -101,7 +107,7 @@ impl UploadUI {
         upload_ui.display_login_window(ctx);
         upload_ui.display_upload_settings_area(ui);
         match upload_ui.upload_type {
-            // UploadType::Disk => upload_ui.display_disk_upload_area(ui),
+            UploadType::Disk => upload_ui.display_disk_upload_area(ui),
             UploadType::Remote => upload_ui.display_remote_upload_area(ui),
         };
         upload_ui.display_hosts_selection(ui);
@@ -223,11 +229,11 @@ impl UploadUI {
             ui.label("Choose upload type:");
             ComboBox::from_id_source("Upload Type")
                 .selected_text(match self.upload_type {
-                    // UploadType::Disk => "Disk Upload",
+                    UploadType::Disk => "Disk Upload",
                     UploadType::Remote => "Remote Upload",
                 })
                 .show_ui(ui, |ui| {
-                    // ui.selectable_value(&mut self.upload_type, UploadType::Disk, "Disk Upload");
+                    ui.selectable_value(&mut self.upload_type, UploadType::Disk, "Disk Upload");
                     ui.selectable_value(&mut self.upload_type, UploadType::Remote, "Remote Upload");
                 });
         });
@@ -247,7 +253,7 @@ impl UploadUI {
         }
         ui.horizontal(|ui| {
             match self.upload_type {
-                // UploadType::Disk => display_project_settings(ui, &mut self.disk_upload_settings.project_settings),
+                UploadType::Disk => display_project_settings(ui, &mut self.disk_upload_settings.project_settings),
                 UploadType::Remote => display_project_settings(ui, &mut self.remote_upload_settings.project_settings)
             }
         });
@@ -292,24 +298,43 @@ impl UploadUI {
         ScrollArea::vertical().id_source("Disk Upload")
             .max_height(ui.available_height() / 2.0)
             .show(ui, |ui| {
-                // ui.horizontal_top(|ui| {
-                //     let half_width = ui.available_width() / 2.0;
-                //     ui.vertical(|ui| {
-                //         if ui.button("Add files").clicked() {
-                //
-                //         }
-                //         ui.add(TextEdit::multiline(&mut self.remote_upload_settings.upload_links)
-                //             .hint_text("Enter the URLS you want to remotely upload, separated by a newline.")
-                //             .desired_width(half_width));
-                //     });
-                //
-                //
-                //     ui.add(TextEdit::multiline(&mut self.remote_upload_settings.file_names)
-                //         .hint_text("Enter custom file names (optional). The name should match the same line as order as the URLs. \
-                //         Leave a newline to use the default names.")
-                //         .desired_width(half_width));
-                // });
-                ui.label("Not supported yet");
+                ui.horizontal_top(|ui| {
+                    let half_width = ui.available_width() / 2.0;
+                    ui.columns(2, |columns| {
+                        let mut paths = self.disk_upload_settings.file_paths.clone();
+                        for (n, file_path) in paths.iter().enumerate() {
+                            columns[0].horizontal(|ui| {
+                                if ui.add(Button::new("-").small()).clicked() {
+                                    let new_paths = self.disk_upload_settings.file_paths.iter()
+                                        .filter(|path| path.to_str().unwrap() != file_path.to_str().unwrap())
+                                        .map(|path| path.to_owned()).collect::<Vec<PathBuf>>();
+                                    self.disk_upload_settings.file_paths = new_paths;
+                                }
+                                ui.label(file_path.to_str().unwrap());
+                            });
+                            columns[1].add(TextEdit::singleline(&mut self.disk_upload_settings.file_names[n])
+                                .hint_text("Enter a custom file name (optional). Leave blank to use the file name.")
+                                .desired_width(half_width));
+                        }
+                        if columns[0].button("Add file").clicked() {
+                            let mut dialog = FileDialog::open_file(None);
+                            dialog.open();
+                            self.open_file_dialogue = Some(dialog);
+                            self.disk_upload_settings.file_names.push(String::new());
+                        }
+                    });
+
+                    if let Some(dialog) = &mut self.open_file_dialogue {
+                        if dialog.show(ui.ctx()).selected() {
+                            if let Some(file) = dialog.path() {
+                                let path = file.to_path_buf();
+                                if !self.disk_upload_settings.file_paths.contains(&path) {
+                                    self.disk_upload_settings.file_paths.push(path);
+                                }
+                            }
+                        }
+                    }
+                });
             });
     }
 
@@ -408,30 +433,34 @@ impl UploadUI {
                     .filter(|(_, details)| details.selected)
                     .map(|(host, _)| host.to_string())
                     .collect();
+                self.disk_upload_settings.hosts = self.hosts.hosts.iter()
+                    .filter(|(_, details)| details.selected)
+                    .map(|(host, _)| host.to_string())
+                    .collect();
+
                 let remote_upload_settings = self.remote_upload_settings.clone();
+                let disk_upload_settings = self.disk_upload_settings.clone();
                 let login = self.login_details.clone();
+                let upload_type = self.upload_type.clone();
                 let rt = Runtime::new().unwrap();
 
                 thread::spawn(move || {
                     rt.block_on(async {
-                        match self.upload_type {
+                        match upload_type {
                             UploadType::Remote => {
                                 let (urls, file_names) = process_urls_and_names(&remote_upload_settings.upload_links, &remote_upload_settings.file_names);
                                 let project_hash = get_project_hash(&remote_upload_settings.project_settings, login.user_id.clone(), upload_sender.clone()).await;
-                                println!("{:?}", project_hash.clone());
                                 let response = if remote_upload_settings.force_data_streaming {
                                     vec![MultiUpUploadResponses::MultiUpFileUpload(stream_file(&urls, &file_names, login.user_id, remote_upload_settings.hosts, project_hash.clone()).await)]
                                 } else {
                                     remote_upload_files(&urls, &file_names, login, remote_upload_settings.hosts, project_hash.clone()).await
                                 };
                                 upload_sender.send(response).unwrap();
-                                //
-                                // if let Ok(mut response) = response {
-                                //     response.project_hash = project_hash;
-                                //     upload_sender.send(Ok(response)).unwrap();
-                                // } else {
-                                //     upload_sender.send(response).unwrap();
-                                // }
+                            },
+                            UploadType::Disk => {
+                                let project_hash = get_project_hash(&disk_upload_settings.project_settings, login.user_id.clone(), upload_sender.clone()).await;
+                                let responses = disk_upload_files(&disk_upload_settings.file_paths, &disk_upload_settings.file_names, login, disk_upload_settings.hosts, project_hash).await;
+                                upload_sender.send(responses).unwrap();
                             }
                         }
                     });
@@ -740,3 +769,84 @@ async fn stream_file(download_urls: &[String], file_names: &[String], user_id: O
     Ok(upload_response)
 }
 
+async fn disk_upload_files(paths: &[PathBuf], file_names: &[String], login: Login, hosts: HashSet<String>, project_hash: Option<String>) -> Vec<MultiUpUploadResponses> {
+    let mut responses = vec![];
+
+    let mut files = vec![];
+    for (index, path) in paths.iter().enumerate() {
+        match tokio::fs::File::open(path).await {
+            Ok(file) => {
+                let stream = FramedRead::new(file.try_clone().await.unwrap(), BytesCodec::new());
+                let file_body = reqwest::Body::wrap_stream(stream);
+                let length = match file.metadata().await {
+                    Ok(data) => data.len(),
+                    Err(error) => {
+                        responses.push(MultiUpUploadResponses::MultiUpFileUpload(Err(LinkError::Other)));
+                        continue;
+                    }
+                };
+                let file_name = match file_names.get(index) {
+                    Some(name) => if !name.is_empty() {
+                        name.to_string()
+                    } else {
+                        path.file_name().unwrap().to_str().unwrap().to_string()
+                    },
+                    None => {
+                        path.file_name().unwrap().to_str().unwrap().to_string()
+                    }
+                };
+
+                let part = multipart::Part::stream_with_length(file_body, length)
+                    .file_name(file_name);
+
+                files.push(part);
+            }
+            Err(error) => {
+                responses.push(MultiUpUploadResponses::MultiUpFileUpload(Err(LinkError::Invalid)));
+            }
+        };
+    }
+
+
+    let api_url = match get_fastest_server().await {
+        Ok(url) => url,
+        Err(error) => {
+            return vec![MultiUpUploadResponses::MultiUpFileUpload(Err(error))];
+        }
+    };
+    let mut form = multipart::Form::new();
+
+    if let Some(id) = login.user_id {
+        form = form.text("user", id);
+    }
+
+    if let Some(hash) = project_hash.clone() {
+        form = form.text("project-hash", hash);
+    }
+
+    for host in hosts {
+        form = form.text(host, "true");
+    }
+
+    for part in files {
+        form = form.part("files[]", part);
+    }
+
+    let client = Client::new();
+    let response = match client.post(api_url).multipart(form).send().await {
+        Ok(response) => response,
+        Err(error) => return vec![MultiUpUploadResponses::MultiUpFileUpload(Err(LinkError::APIError(error.to_string())))]
+    };
+
+
+    let upload_response = match response.json::<MultiUpFileUploadResponse>().await {
+        Ok(mut response) => {
+            response.project_hash = project_hash;
+            response
+        },
+        Err(error) => return vec![MultiUpUploadResponses::MultiUpFileUpload(Err(LinkError::APIError(error.to_string())))]
+    };
+
+    responses.push(MultiUpUploadResponses::MultiUpFileUpload(Ok(upload_response)));
+    responses
+}

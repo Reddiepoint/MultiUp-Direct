@@ -3,7 +3,6 @@ use std::collections::{BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
 use crate::modules::api::MultiUpLinkInformation;
 
-#[derive(Debug)]
 pub enum MultiUpLink {
     Project(ProjectLink),
     Download(DownloadLink),
@@ -143,7 +142,7 @@ pub enum LinkError {
     Invalid,
     InQueue,
     NoLinks,
-    // Other,
+    Other,
     Reqwest(reqwest::Error),
     TimedOut
 }
