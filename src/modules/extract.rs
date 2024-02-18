@@ -279,12 +279,6 @@ impl ExtractUI {
                             match link {
                                 MultiUpLink::Project(project) => {
                                     if let Some(Ok(())) = project.status {
-                                        for link in project.download_links.as_ref().unwrap() {
-                                            let filtered_links = self.filter.filter_links(link);
-                                            for link in filtered_links {
-                                                self.direct_links.push(link);
-                                            }
-                                        }
                                         CollapsingHeader::new(&project.name)
                                             .id_source(&project.link_id)
                                             .default_open(true)
