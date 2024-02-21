@@ -1,6 +1,6 @@
 [package]
 name = "MultiUp-Direct"
-version = "3.2.0-beta.3"
+version = "3.2.0-beta.4"
 authors = ["Redpoint"]
 edition = "2021"
 
@@ -24,7 +24,7 @@ futures = { version = "0.3.29" }
 reqwest = { version = "0.11.22", features = ["json", "multipart", "stream"] }
 regex = { version = "1.10.2" }
 scraper = { version = "0.18.1" }
-self_update = "0.39.0"
+self_update = { version = "0.39.0", features = ["default", "compression-zip-deflate"]}
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = { version = "1.0.108" }
 tokio = { version = "1.34.0", features = ["full"] }
