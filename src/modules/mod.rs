@@ -5,5 +5,6 @@ mod filter;
 mod general;
 mod help;
 mod links;
-pub mod main;
+pub mod app;
 mod upload;
+mod help;

@@ -94,8 +94,8 @@ impl MultiUpDirect {
 
             ExtractUI::display_error_log(&mut self.extract_ui, ctx);
             DebridUI::display_error_log(&mut self.debrid_ui, ctx);
-            HelpUI::show_help(ctx, &mut self.help_ui);
-            HelpUI::show_update(ctx, &mut self.help_ui);
+            self.help_ui.show_help(ctx);
+            self.help_ui.show_update_window(ctx);
         });
     }
 }

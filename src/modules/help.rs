@@ -1,11 +1,8 @@
-use std::cmp::Ordering;
-use std::sync::OnceLock;
 use std::thread;
 use crossbeam_channel::{Receiver, Sender};
-use eframe::egui::{Context, ScrollArea, Window};
-use reqwest::Client;
-use scraper::{Element, Selector};
-use crate::modules::general::get_page_html;
+use eframe::egui::{Button, Context, ScrollArea, Window};
+use self_update::update::Release;
+use self_update::version::bump_is_greater;
 
 #[derive(Default)]
 pub enum UpdateStatus {
@@ -13,35 +10,61 @@ pub enum UpdateStatus {
     Unchecked,
     Checking,
     Outdated,
-    Updated
+    Updated,
+    Error(String),
 }
 
-#[derive(Default)]
+struct HelpChannels {
+    pub release_sender: Sender<Result<((Release, bool)), String>>,
+    pub release_receiver: Receiver<Result<((Release, bool)), String>>,
+    pub update_status_sender: Sender<Result<(), String>>,
+    pub update_status_receiver: Receiver<Result<(), String>>,
+}
+
+impl Default for HelpChannels {
+    fn default() -> Self {
+        let (release_sender, release_receiver) = crossbeam_channel::bounded(1);
+        let (update_status_sender, update_status_receiver) = crossbeam_channel::bounded(1);
+        Self {
+            release_sender,
+            release_receiver,
+            update_status_sender,
+            update_status_receiver
+        }
+    }
+}
+
 pub struct HelpUI {
     pub show_help: bool,
     pub show_update: bool,
-    pub update_sender: Option<Sender<(String, Vec<String>)>>,
-    pub update_receiver: Option<Receiver<(String, Vec<String>)>>,
-    pub update_status: UpdateStatus,
-    pub latest_changelog: Vec<String>,
-    pub latest_version: String,
+    channels: HelpChannels,
+    update_status: UpdateStatus,
+    latest_version: (Release, bool),
+    updating: bool,
+    updating_status: String,
     pub link_to_latest_version: String,
 }
 
-static VERSION_SELECTOR: OnceLock<Selector> = OnceLock::new();
-static CHANGELOG_SELECTOR: OnceLock<Selector> = OnceLock::new();
+impl Default for HelpUI {
+    fn default() -> Self {
+        Self {
+            show_help: false,
+            show_update: true,
+            channels: HelpChannels::default(),
+            update_status: UpdateStatus::default(),
+            latest_version: (Release::default(), false),
+            updating: false,
+            updating_status: String::new(),
+            link_to_latest_version: String::new(),
+        }
+    }
+}
+
 
 const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
-const DOCUMENTATION: &str = "https://reddiepoint.github.io/MultiUp-Direct-Documentation/";
-
-pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
+const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
 
 impl HelpUI {
-    pub fn update_channels(&mut self, tx: Sender<(String, Vec<String>)>, rx: Receiver<(String, Vec<String>)>) {
-        self.update_sender = Some(tx);
-        self.update_receiver = Some(rx);
-    }
-
     pub fn show_help(ctx: &Context, help_ui: &mut HelpUI) {
         Window::new("Help").open(&mut help_ui.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -84,97 +107,150 @@ impl HelpUI {
         }));
     }
 
-    pub fn show_update(ctx: &Context, help_ui: &mut HelpUI) {
-        Window::new("Updates").open(&mut help_ui.show_update).show(ctx, |ui| {
+    pub fn show_update_window(&mut self, ctx: &Context) {
+        Window::new("Updates").open(&mut self.show_update).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading({
-                    match help_ui.update_status {
-                        UpdateStatus::Unchecked => "Checking for updates...",
-                        UpdateStatus::Checking => "Checking for updates...",
-                        UpdateStatus::Outdated => "There is an update available!",
-                        UpdateStatus::Updated => "You are up-to-date!",
+                    match &self.update_status {
+                        UpdateStatus::Unchecked | UpdateStatus::Checking => "Checking for updates...".to_string(),
+                        UpdateStatus::Outdated => "There is an update available!".to_string(),
+                        UpdateStatus::Updated => "You are up-to-date!".to_string(),
+                        UpdateStatus::Error(error) => format!("Update failed: {}", error)
                     }
                 });
 
-                if let UpdateStatus::Checking = help_ui.update_status {
+                if let UpdateStatus::Checking = self.update_status {
                     ui.spinner();
                 };
             });
 
 
             ui.hyperlink_to("Homepage", HOMEPAGE);
-            let mut changelog_text = String::new();
-            for change in help_ui.latest_changelog.iter() {
-                changelog_text.push_str(&format!("- {}\n", change));
+
+
+            match self.update_status {
+                UpdateStatus::Unchecked => {
+                    let release_sender = self.channels.release_sender.clone();
+                    thread::spawn(move || {
+                        match HelpUI::check_for_updates() {
+                            Ok(releases) => {
+                                let _ = release_sender.send(Ok(releases));
+                            },
+                            Err(error) => {
+                                let _ = release_sender.send(Err(error.to_string()));
+                            }
+                        };
+                    });
+                    self.update_status = UpdateStatus::Checking;
+                }
+
+                UpdateStatus::Checking => {
+                    if let Ok(update) = self.channels.release_receiver.try_recv() {
+                        match update {
+                            Ok(update) => {
+                                self.latest_version = update;
+
+                                if self.latest_version.1 {
+                                    self.update_status = UpdateStatus::Outdated;
+                                } else {
+                                    self.update_status = UpdateStatus::Updated;
+                                }
+                            },
+                            Err(error) => {
+                                self.update_status = UpdateStatus::Error(error);
+                            }
+                        }
+                    }
+                },
+                _ => {}
             };
 
-            if !changelog_text.is_empty() {
-                ui.separator();
-                ui.heading(format!("What's new in v{}", help_ui.latest_version));
-                ui.label(changelog_text);
-            }
-
-            match help_ui.update_status {
-                UpdateStatus::Unchecked => {
-                    HelpUI::is_updated(help_ui.update_sender.clone().unwrap());
-                    help_ui.update_status = UpdateStatus::Checking;
-                }
-                UpdateStatus::Outdated => {}
-                UpdateStatus::Updated => {}
-                UpdateStatus::Checking => {
-                    if let Ok((latest_version, changelog)) = help_ui.update_receiver.clone().unwrap().try_recv() {
-                        let version = VERSION.split('-').next().unwrap().to_string();
-                        let app_version: Vec<u32> = version.split('.').map(|s| s.parse().unwrap()).collect();
-                        let homepage_version: Vec<u32> = latest_version.split('.').map(|s| s.parse().unwrap()).collect();
-                        match app_version.cmp(&homepage_version) {
-                            Ordering::Less => help_ui.update_status = UpdateStatus::Outdated,
-                            Ordering::Equal => help_ui.update_status = UpdateStatus::Updated,
-                            Ordering::Greater => help_ui.update_status = UpdateStatus::Updated,
-                        };
-                        help_ui.latest_changelog = changelog;
-                        help_ui.latest_version = latest_version;
+            if let Ok(status) = self.channels.update_status_receiver.try_recv() {
+                match status {
+                    Ok(_) => {
+                        self.updating = false;
+                        self.updating_status = "success".to_string();
+                    }
+                    Err(error) => {
+                        self.updating = false;
+                        self.updating_status = error;
                     }
                 }
-            };
+            }
+
+            if self.latest_version.1 {
+                ui.label(format!("Update available from v{} -> v{}", env!("CARGO_PKG_VERSION"), self.latest_version.0.version));
+                if ui.add_enabled(!self.updating, Button::new("Update")).clicked() {
+                    self.updating = true;
+                    let update_status_sender = self.channels.update_status_sender.clone();
+                    let release_sender = self.channels.release_sender.clone();
+                    thread::spawn(move || {
+                        match HelpUI::update() {
+                            Ok(app) => {
+                                let _ = update_status_sender.send(Ok(app));
+                            },
+                            Err(error) => {
+                                let _ = update_status_sender.send(Err(error.to_string()));
+                            }
+                        };
+
+                        match HelpUI::check_for_updates() {
+                            Ok(releases) => {
+                                let _ = release_sender.send(Ok(releases));
+                            },
+                            Err(error) => {
+                                let _ = release_sender.send(Err(error.to_string()));
+                            }
+                        };
+                    });
+                }
+
+                if !self.updating_status.is_empty() {
+                    if self.updating_status == "success" {
+                        ui.label("Please restart the application to use the latest version!");
+                    } else {
+                        ui.label(format!("Error updating creator: {}", self.updating_status));
+                    }
+                }
+
+                if let Some(body) = &self.latest_version.0.body {
+                    if !body.is_empty() {
+                        ui.heading("What's New");
+                        ui.label(body);
+                    }
+                }
+            }
         });
     }
 
-    pub fn is_updated(tx: Sender<(String, Vec<String>)>) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        // let client = reqwest::Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36 Edge/12.0").build().unwrap();
-        let version_selector = VERSION_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="color: #19EC1C"] span[style="font-weight: bold"]"#).unwrap());
-        let changelog_selector = CHANGELOG_SELECTOR.get_or_init(|| Selector::parse(r#"span[style="font-weight: bold"] > span[style="color: #E93C1C"]"#).unwrap());
-        thread::spawn(move || {
-            rt.block_on(async {
-                let client = Client::new();
-                let html = match get_page_html(HOMEPAGE, &client, None, 0).await {
-                    Ok(html) => html,
-                    Err(error) => {
-                        let _ = tx.send(("Unknown".to_string(), vec![format!("Failed to get changelog: {:?}", error)]));
-                        return;
-                    }
-                };
-                let website_html = scraper::Html::parse_document(&html);
-                let latest_version = website_html.select(version_selector).next().unwrap();
-                let changelog = website_html.select(changelog_selector).find(|element| element.text().collect::<Vec<_>>().join("") == "Changelog").unwrap().parent_element().unwrap().next_sibling_element().unwrap().next_sibling_element().unwrap();
-                let mut changelog_children = vec![];
-                let mut changelog_points = vec![];
-                for child in changelog.children() {
-                    changelog_children.push(child);
-                }
+    fn check_for_updates() -> Result<(Release, bool), Box<dyn std::error::Error>> {
+        let app_current_version = env!("CARGO_PKG_VERSION").to_string();
+        let multiup_direct_update = self_update::backends::github::Update::configure()
+            .repo_owner("Reddiepoint")
+            .repo_name("MultiUp-Direct")
+            .target("")
+            .bin_name("MultiUp-Direct")
+            .current_version(&app_current_version)
+            .build()?
+            .get_latest_release()?;
 
-                while let Some(node) = changelog_children.pop() {
-                    if let Some(text) = node.value().as_text() {
-                        changelog_points.push(text.trim().to_string());
-                    }
-                    for child in node.children() {
-                        changelog_children.push(child);
-                    }
-                };
-                let mut changelog: Vec<String> = changelog_points.iter_mut().filter(|text| !text.is_empty()).map(|text| text.to_string()).collect();
-                changelog.reverse();
-                let _ = tx.send((latest_version.inner_html()[1..].to_string(), changelog));
-            });
-        });
+        let is_app_update_greater = bump_is_greater(&app_current_version, &multiup_direct_update.version).unwrap();
+
+        Ok((multiup_direct_update, is_app_update_greater))
+    }
+
+    fn update() -> Result<(), Box<dyn std::error::Error>> {
+        self_update::backends::github::Update::configure()
+            .repo_owner("Reddiepoint")
+            .repo_name("MultiUp-Direct")
+            .target("")
+            .bin_name("MultiUp-Direct")
+            .show_download_progress(false)
+            .show_output(false)
+            .no_confirm(true)
+            .current_version(env!("CARGO_PKG_VERSION"))
+            .build()?
+            .update()?;
+        Ok(())
     }
 }

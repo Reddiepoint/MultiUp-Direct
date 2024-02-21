@@ -2,7 +2,7 @@
 mod modules;
 
 use eframe::egui::ViewportBuilder;
-use crate::modules::main::MultiUpDirect;
+use crate::modules::app::MultiUpDirect;
 
 
 fn main() -> Result<(), eframe::Error> {
