@@ -67,9 +67,6 @@ impl MultiUpDirect {
                 ui.separator();
 
                 if ui.button("Check for updates").clicked() {
-                    let (tx, rx) = crossbeam_channel::unbounded();
-                    // (self.help_ui.update_sender, self.help_ui.update_receiver) = (Some(tx), Some(rx));
-                    self.help_ui.update_channels(tx, rx);
                     self.help_ui.show_update = true;
                     ui.close_menu();
                 }
@@ -94,7 +91,7 @@ impl MultiUpDirect {
 
             ExtractUI::display_error_log(&mut self.extract_ui, ctx);
             DebridUI::display_error_log(&mut self.debrid_ui, ctx);
-            self.help_ui.show_help(ctx);
+            self.help_ui.show_help_window(ctx);
             self.help_ui.show_update_window(ctx);
         });
     }

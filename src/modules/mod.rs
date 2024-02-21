@@ -7,4 +7,3 @@ mod help;
 mod links;
 pub mod app;
 mod upload;
-mod help;
