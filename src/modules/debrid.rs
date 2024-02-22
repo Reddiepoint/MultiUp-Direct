@@ -92,7 +92,7 @@ impl DebridUI {
             };
 
             if ui.button("Read from file").clicked() {
-                let api_key_json = fs::read_to_string("./api_key.json");
+                let api_key_json = fs::read_to_string("api_key.json");
                 match api_key_json {
                     Ok(json_string) => {
                         let api_key_result: Result<DebridAPIKeys, _> = serde_json::from_str(&json_string);
