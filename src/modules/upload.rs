@@ -5,7 +5,7 @@ use reqwest::{Client, multipart};
 use std::thread;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, FontFamily, FontId, Id, ScrollArea, TextEdit, TextStyle, Ui, Window};
+use eframe::egui::{Align2, Button, Checkbox, ComboBox, Context, FontFamily, FontId, Id, Label, ScrollArea, TextEdit, TextStyle, Ui, Window};
 use eframe::egui::Direction::TopDown;
 use egui_file::FileDialog;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
@@ -76,8 +76,8 @@ impl Default for RemoteUploadSettings {
 #[derive(Clone, Default)]
 pub struct DiskUploadSettings {
     project_settings: ProjectSettings,
-    file_paths: Vec<PathBuf>,
-    file_names: Vec<String>,
+    pub file_paths: Vec<PathBuf>,
+    pub file_names: Vec<String>,
     hosts: HashSet<String>
 }
 
@@ -88,8 +88,8 @@ pub struct UploadUI {
     show_login_window: bool,
     login_details: Login,
     login_response: LoginResponse,
-    upload_type: UploadType,
-    disk_upload_settings: DiskUploadSettings,
+    pub upload_type: UploadType,
+    pub disk_upload_settings: DiskUploadSettings,
     open_file_dialogue: Option<FileDialog>,
     remote_upload_settings: RemoteUploadSettings,
     hosts: AvailableHosts,
@@ -310,13 +310,14 @@ impl UploadUI {
                                         .map(|path| path.to_owned()).collect::<Vec<PathBuf>>();
                                     self.disk_upload_settings.file_paths = new_paths;
                                 }
-                                ui.label(file_path.to_str().unwrap());
+                                ui.add(Label::new(file_path.to_str().unwrap()).truncate(true));
                             });
                             columns[1].add(TextEdit::singleline(&mut self.disk_upload_settings.file_names[n])
                                 .hint_text("Enter a custom file name (optional). Leave blank to use the file name.")
                                 .desired_width(half_width));
                         }
-                        if columns[0].button("Add file(s)").clicked() {
+                        let button_text = format!("Add file(s) - {} files added", self.disk_upload_settings.file_paths.len());
+                        if columns[0].button(button_text).clicked() {
                             let mut dialog = FileDialog::open_file(None).multi_select(true);
                             dialog.open();
                             self.open_file_dialogue = Some(dialog);
