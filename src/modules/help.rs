@@ -97,7 +97,7 @@ impl HelpUI {
 
             ui.heading("Upload");
             ui.label("Uploads content to MultiUp.\n\n\
-            Remote uploaded with data streaming enabled allows for better support of different sites, including Debrid services.\
+            Remote uploaded with data streaming enabled allows for better support of different sites, including Debrid services. \
             Since this is an experimental feature, be careful when uploading large files.\n\
             Data streaming essentially downloads and uploads chunks of data, as if the file was downloaded \
             to disk and then uploaded to MultiUp. However, in this case, the data is not written to disk.");
