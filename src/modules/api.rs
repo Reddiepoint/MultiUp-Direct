@@ -252,7 +252,7 @@ pub struct AvailableHosts {
     pub error: String,
     pub hosts: BTreeMap<String, HostDetails>,
     pub default: Vec<String>,
-    #[serde(rename = "maxHosts")]
+    #[serde(rename = "numberMaximumHosts")]
     pub max_hosts: u32,
 }
 
