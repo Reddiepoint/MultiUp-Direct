@@ -5,9 +5,16 @@ use crate::modules::debrid::DebridUI;
 use crate::modules::upload::UploadUI;
 use crate::modules::help::HelpUI;
 
+
+pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
+
+pub const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
+
+
+
 /// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
-enum TabBar {
+pub enum TabBar {
     #[default]
     Extract,
     Debrid,
@@ -19,10 +26,10 @@ enum TabBar {
 /// Stores the state of each tab.
 #[derive(Default)]
 pub struct MultiUpDirect {
-    tab_bar: TabBar,
+    pub tab_bar: TabBar,
     extract_ui: ExtractUI,
     debrid_ui: DebridUI,
-    upload_ui: UploadUI,
+    pub upload_ui: UploadUI,
     help_ui: HelpUI,
 }
 

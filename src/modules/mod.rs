@@ -6,4 +6,4 @@ mod filter;
 mod general;
 mod help;
 mod links;
-mod upload;
+pub mod upload;

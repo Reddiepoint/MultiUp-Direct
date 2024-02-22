@@ -3,6 +3,7 @@ use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::{Button, Context, ScrollArea, Window};
 use self_update::update::Release;
 use self_update::version::bump_is_greater;
+use crate::modules::app::{DOCUMENTATION, HOMEPAGE};
 
 #[derive(Default)]
 pub enum UpdateStatus {
@@ -59,10 +60,6 @@ impl Default for HelpUI {
         }
     }
 }
-
-
-const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
-const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
 
 impl HelpUI {
     pub fn show_help_window(&mut self, ctx: &Context) {
