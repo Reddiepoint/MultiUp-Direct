@@ -15,8 +15,8 @@ pub enum UpdateStatus {
 }
 
 struct HelpChannels {
-    pub release_sender: Sender<Result<((Release, bool)), String>>,
-    pub release_receiver: Receiver<Result<((Release, bool)), String>>,
+    pub release_sender: Sender<Result<(Release, bool), String>>,
+    pub release_receiver: Receiver<Result<(Release, bool), String>>,
     pub update_status_sender: Sender<Result<(), String>>,
     pub update_status_receiver: Receiver<Result<(), String>>,
 }

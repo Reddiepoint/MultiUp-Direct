@@ -316,20 +316,21 @@ impl UploadUI {
                                 .hint_text("Enter a custom file name (optional). Leave blank to use the file name.")
                                 .desired_width(half_width));
                         }
-                        if columns[0].button("Add file").clicked() {
-                            let mut dialog = FileDialog::open_file(None);
+                        if columns[0].button("Add file(s)").clicked() {
+                            let mut dialog = FileDialog::open_file(None).multi_select(true);
                             dialog.open();
                             self.open_file_dialogue = Some(dialog);
-                            self.disk_upload_settings.file_names.push(String::new());
                         }
                     });
 
                     if let Some(dialog) = &mut self.open_file_dialogue {
                         if dialog.show(ui.ctx()).selected() {
-                            if let Some(file) = dialog.path() {
-                                let path = file.to_path_buf();
+                            let file_paths = dialog.selection();
+                            for file_path in file_paths {
+                                let path = file_path.to_path_buf();
                                 if !self.disk_upload_settings.file_paths.contains(&path) {
                                     self.disk_upload_settings.file_paths.push(path);
+                                    self.disk_upload_settings.file_names.push(String::new());
                                 }
                             }
                         }
