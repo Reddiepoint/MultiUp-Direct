@@ -243,7 +243,11 @@ impl HelpUI {
         self_update::backends::github::Update::configure()
             .repo_owner("Reddiepoint")
             .repo_name("MultiUp-Direct")
-            .target("")
+            .target(match std::env::consts::OS {
+                "linux" => "amd64",
+                "macos" => "darwin",
+                _ => ""
+            })
             .bin_name("MultiUp-Direct")
             .show_download_progress(false)
             .show_output(false)
