@@ -1,22 +1,24 @@
 use std::collections::{BTreeSet, HashSet};
+use std::sync::{Arc, OnceLock};
+use std::thread;
+
 use async_recursion::async_recursion;
+use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::{Align2, Button, CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui, Window};
+use eframe::egui::Direction::TopDown;
 use egui_extras::{Column, TableBuilder};
+use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
+use headless_chrome::Browser;
 use regex::Regex;
 use reqwest::Client;
 use scraper::{ElementRef, Selector};
-use std::sync::{Arc, OnceLock};
-use std::thread;
-use crossbeam_channel::{Receiver, Sender};
-use eframe::egui::Direction::TopDown;
-use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
+
 use crate::modules::api::{MultiUpLinkInformation, recheck_validity_api};
 use crate::modules::filter::FilterMenu;
-use crate::modules::general::get_page_html;
+use crate::modules::general::{get_page_html, new_browser};
 use crate::modules::links::{DirectLink, DownloadLink, LinkError, MultiUpLink, ProjectLink};
-
 
 #[derive(Default)]
 struct Channels {
@@ -604,13 +606,15 @@ impl ExtractUI {
 async fn extract_direct_links(input_text: &str, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> Vec<MultiUpLink> {
     // Detect links
     let detected_links = detect_links(input_text);
-
+    
+    // Create browser for links
+    let browser = new_browser();
     // Process links
-    let processed_links = process_links(detected_links, cancel_receiver.clone()).await;
+    let processed_links = process_links(detected_links, cancel_receiver.clone(), browser.clone()).await;
 
     // Return vec of completed links
     // let time_now = Instant::now();
-    let completed_links = get_direct_links(processed_links, recheck_validity, cancel_receiver).await;
+    let completed_links = get_direct_links(processed_links, recheck_validity, cancel_receiver, browser).await;
     // let time_taken = time_now.elapsed();
     // println!("{}", time_taken.as_secs_f32());
     completed_links
@@ -633,7 +637,7 @@ fn detect_links(input_text: &str) -> Vec<String> {
     detected_links
 }
 
-async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bool>) -> Vec<MultiUpLink> {
+async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bool>, browser: Browser) -> Vec<MultiUpLink> {
     // Create regexes
     let (_, download_regex, mirror_regex, project_regex) = create_regexes();
 
@@ -643,14 +647,14 @@ async fn process_links(detected_links: Vec<String>, cancel_receiver: Receiver<bo
 
     // Store tasks for processing project links, which will be awaited after other links are processed
     let mut project_processing_tasks = Vec::new();
-
     // Processing
     for link in detected_links {
         let cancel_receiver = cancel_receiver.clone();
+        let browser = browser.clone();
         if project_regex.is_match(&link) {
             let link = link.clone();
             let processing_task = tokio::spawn(async move {
-                process_project_link(&link, cancel_receiver).await
+                process_project_link(&link, cancel_receiver, browser).await
             });
             project_processing_tasks.push(processing_task);
         } else if mirror_regex.is_match(&link) {
@@ -721,14 +725,14 @@ pub fn create_regexes() -> (Regex, Regex, Regex, Regex) {
 ///
 /// This function takes in a project link, mirror regex, and download regex as inputs,
 /// and returns a Project MultiUpLink.
-async fn process_project_link(project_link: &str, cancel_receiver: Receiver<bool>) -> MultiUpLink {
+async fn process_project_link(project_link: &str, cancel_receiver: Receiver<bool>, browser: Browser) -> MultiUpLink {
     // Download links
     let download_regex = DOWNLOAD_REGEX.get().unwrap();
 
     // Mirror links
     let mirror_regex = MIRROR_REGEX.get().unwrap();
 
-    let (id, name, download_links) = get_project_information(project_link, cancel_receiver).await;
+    let (id, name, download_links) = get_project_information(project_link, cancel_receiver, browser).await;
     let download_links = match download_links {
         Ok(download_links) => download_links,
         Err(error) => {
@@ -764,13 +768,13 @@ static PROJECT_TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 /// Parses the project link for an ID, parses the page title for a name and extracts download links.
 /// If there is no name, it is set to the ID.
 #[async_recursion]
-async fn get_project_information(project_link: &str, cancel_receiver: Receiver<bool>) -> (String, String, Result<Vec<String>, LinkError>) {
+async fn get_project_information(project_link: &str, cancel_receiver: Receiver<bool>, browser: Browser) -> (String, String, Result<Vec<String>, LinkError>) {
     let link_parts: Vec<&str> = project_link.split('/').collect();
     let id = link_parts.last().unwrap().to_string();
     let name = id.clone();
 
     let client = Client::new();
-    let html = match get_page_html(project_link, &client, Some(cancel_receiver), 0).await {
+    let html = match get_page_html(project_link, &client, Some(cancel_receiver), 0, browser).await {
         Ok(html) => html,
         Err(error) => {
             return (id, name, Err(error));
@@ -827,7 +831,7 @@ fn process_non_project_link(link: &str, regex: &Regex) -> DownloadLink {
 }
 
 
-async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: bool, cancel_receiver: Receiver<bool>) -> Vec<MultiUpLink> {
+async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: bool, cancel_receiver: Receiver<bool>, browser: Browser) -> Vec<MultiUpLink> {
     // At the beginning of the function
     let semaphore = Arc::new(Semaphore::new(100));
     let mut tasks = Vec::new();
@@ -835,13 +839,14 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
     for link in multiup_links {
         let cancel_receiver = cancel_receiver.clone();
         let client = client.clone();
+        let browser = browser.clone();
         match link {
             MultiUpLink::Project(project_link) => {
                 // Create a task for each project link
                 let semaphore = Arc::clone(&semaphore);
                 let task = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
-                    let project = get_direct_links_from_project(project_link, recheck_validity, cancel_receiver, client).await;
+                    let project = get_direct_links_from_project(project_link, recheck_validity, cancel_receiver, client, browser).await;
                     MultiUpLink::Project(project)
                 });
                 tasks.push(task);
@@ -851,7 +856,7 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
                 let semaphore = Arc::clone(&semaphore);
                 let task = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
-                    let download = get_direct_links_from_download_link(download_link, recheck_validity, cancel_receiver, client).await;
+                    let download = get_direct_links_from_download_link(download_link, recheck_validity, cancel_receiver, client, browser).await;
                     MultiUpLink::Download(download)
                 });
                 tasks.push(task);
@@ -869,21 +874,22 @@ async fn get_direct_links(multiup_links: Vec<MultiUpLink>, recheck_validity: boo
     multiup_links
 }
 
-async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client) -> ProjectLink {
+async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client, browser: Browser) -> ProjectLink {
     if project_link.download_links.is_none() {
         return project_link;
     }
 
     let semaphore = Arc::new(Semaphore::new(200)); // Adjust the number of permits according to your needs
     let mut tasks = Vec::new();
-
+    
     for link in project_link.download_links.take().unwrap() {
         let client = client.clone();
+        let browser = browser.clone();
         let semaphore = Arc::clone(&semaphore);
         let cancel_receiver = cancel_receiver.clone();
         let task = tokio::spawn(async move {
             let _permit = semaphore.acquire().await.unwrap();
-            get_direct_links_from_download_link(link, recheck_validity, cancel_receiver, client).await
+            get_direct_links_from_download_link(link, recheck_validity, cancel_receiver, client, browser).await
         });
         tasks.push(task);
     }
@@ -900,9 +906,9 @@ async fn get_direct_links_from_project(mut project_link: ProjectLink, recheck_va
 
 const MIRROR_PREFIX: &str = "https://multiup.io/en/mirror/";
 
-async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client) -> DownloadLink {
-    let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id + "/dummy_text";
-    let download_link = process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone()).await;
+async fn get_direct_links_from_download_link(download_link: DownloadLink, recheck_validity: bool, cancel_receiver: Receiver<bool>, client: Client, browser: Browser) -> DownloadLink {
+    let mirror_link = MIRROR_PREFIX.to_owned() + &download_link.link_id/* + "/dummy_text"*/;
+    let download_link = process_mirror_link(mirror_link.clone(), download_link, cancel_receiver.clone(), browser).await;
     if recheck_validity {
         recheck_validity_api(mirror_link, download_link, cancel_receiver, client).await
     } else {
@@ -910,8 +916,8 @@ async fn get_direct_links_from_download_link(download_link: DownloadLink, rechec
     }
 }
 
-async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>) -> DownloadLink {
-    let information = get_mirror_information(&mirror_link, cancel_receiver).await;
+async fn process_mirror_link(mirror_link: String, mut download_link: DownloadLink, cancel_receiver: Receiver<bool>, browser: Browser) -> DownloadLink {
+    let information = get_mirror_information(&mirror_link, cancel_receiver, browser).await;
     match information {
         Ok((direct_links, link_information)) => {
             download_link.direct_links = Some(direct_links);
@@ -932,11 +938,11 @@ static QUEUE_SELECTOR: OnceLock<Selector> = OnceLock::new();
 
 /// Retrieves
 #[async_recursion]
-async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<bool>) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
+async fn get_mirror_information(mirror_link: &str, cancel_receiver: Receiver<bool>, browser: Browser) -> Result<(BTreeSet<DirectLink>, MultiUpLinkInformation), LinkError> {
     let mut direct_links: BTreeSet<DirectLink> = BTreeSet::new();
 
     let client = Client::new();
-    let html = match get_page_html(mirror_link, &client, Some(cancel_receiver), 0).await {
+    let html = match get_page_html(mirror_link, &client, Some(cancel_receiver), 0, browser).await {
         Ok(html) => html,
         Err(error) => {
             return Err(error);
