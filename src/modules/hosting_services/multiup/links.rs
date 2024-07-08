@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
-use crate::modules::api::MultiUpLinkInformation;
+use crate::modules::hosting_services::multiup::api::MultiUpLinkInformation;
 
 pub enum MultiUpLink {
     Project(ProjectLink),

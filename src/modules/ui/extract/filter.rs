@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use eframe::egui::{ScrollArea, Ui};
-use crate::modules::links::{DownloadLink, MultiUpLink};
+use crate::modules::hosting_services::multiup::links::{DownloadLink, MultiUpLink};
 
 #[derive(Debug)]
 pub struct FilterMenu {

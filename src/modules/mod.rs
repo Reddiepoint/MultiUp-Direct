@@ -1,9 +1,6 @@
-mod api;
 pub mod app;
-mod debrid;
-mod extract;
-mod filter;
 mod general;
-mod help;
-mod links;
-pub mod upload;
+
+pub mod debrid_services;
+pub mod hosting_services;
+pub mod ui;

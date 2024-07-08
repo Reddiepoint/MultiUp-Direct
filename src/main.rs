@@ -1,12 +1,13 @@
 #![windows_subsystem = "windows"]
 
-mod modules;
-
 use std::path::PathBuf;
-use eframe::egui::ViewportBuilder;
-use crate::modules::app::{DOCUMENTATION, MultiUpDirect, TabBar};
-use crate::modules::upload::UploadType;
 
+use eframe::egui::ViewportBuilder;
+
+use crate::modules::app::{DOCUMENTATION, MultiUpDirect, TabBar};
+use modules::ui::upload::upload::UploadType;
+
+mod modules;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
@@ -19,7 +20,7 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     let mut app = MultiUpDirect::default();
-    let args = std::env::args().collect::<Vec<String>>();
+/*    let args = std::env::args().collect::<Vec<String>>();
     if args.len() > 1 {
         if args[1] == "--help" {
             println!("See {} for help.", DOCUMENTATION);
@@ -44,10 +45,10 @@ fn main() -> Result<(), eframe::Error> {
             }
         }
     }
-
+*/
     eframe::run_native(
         "MultiUp Direct",
         options,
-        Box::new(|_cc| Box::<MultiUpDirect>::new(app)),
+        Box::new(|cc| Ok(Box::<MultiUpDirect>::new(app))),
     )
 }

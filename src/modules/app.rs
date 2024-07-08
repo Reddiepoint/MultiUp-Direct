@@ -1,15 +1,14 @@
 use eframe::{App, Frame};
 use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
-use crate::modules::extract::ExtractUI;
-use crate::modules::debrid::DebridUI;
-use crate::modules::upload::UploadUI;
-use crate::modules::help::HelpUI;
 
+use crate::modules::ui::debrid::debrid::DebridUI;
+use crate::modules::ui::help::HelpUI;
+use crate::modules::ui::extract::extract::ExtractUI;
+use crate::modules::ui::upload::upload::UploadUI;
 
 pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
 pub const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
-
 
 
 /// Represents a bar containing tabs for each function.
@@ -18,11 +17,11 @@ pub enum TabBar {
     #[default]
     Extract,
     Debrid,
-    Upload
+    Upload,
 }
 
 /// A struct representing the application UI.
-/// 
+///
 /// Stores the state of each tab.
 #[derive(Default)]
 pub struct MultiUpDirect {
@@ -41,6 +40,11 @@ impl App for MultiUpDirect {
 }
 
 impl MultiUpDirect {
+    /// Creates a new `MultiUpDirect` app.
+    fn new(_cc: &eframe::CreationContext) -> Self {
+        Self::default()
+    }
+    
     /// Displays the top bar.
     ///
     /// This method is responsible for rendering the top bar of the application, which includes
@@ -55,7 +59,6 @@ impl MultiUpDirect {
 
                 // Menu bar/toolbar elements
                 self.menu_bar(ui);
-
             });
         });
     }

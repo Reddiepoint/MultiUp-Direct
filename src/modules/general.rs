@@ -6,7 +6,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 use headless_chrome::{Browser, LaunchOptions};
 use reqwest::Client;
 
-use crate::modules::links::LinkError;
+use crate::modules::hosting_services::multiup::links::LinkError;
 
 #[async_recursion]
 pub async fn get_page_html(

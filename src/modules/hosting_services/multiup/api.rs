@@ -1,9 +1,3 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use crossbeam_channel::{Receiver, TryRecvError};
-use reqwest::{Client, multipart};
-use serde::Deserialize;
-use crate::modules::debrid::{DebridResponse, DebridService};
-use crate::modules::links::{DirectLink, DownloadLink, LinkError};
 
 /// Represents information about a MultiUp link from the MultiUp API.
 /// Contains details such as the request status, file name, size (in bytes), upload and download dates,
