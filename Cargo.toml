@@ -22,13 +22,14 @@ egui_file = "0.17.0"
 egui-toast = { version = "0.13.0" }
 futures = { version = "0.3.30" }
 headless_chrome = { version = "1.0.10" }
+rayon = "1.10.0"
 reqwest = { version = "0.12.5", features = ["json", "multipart", "stream"] }
 regex = { version = "1.10.5" }
 scraper = { version = "0.19.0" }
 self_update = { version = "0.41.0", features = ["default", "compression-zip-deflate"] }
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = { version = "1.0.120" }
-tokio = { version = "1.38.0", features = ["full"] }
+tokio = { version = "1.38.0", features = ["full", "macros"] }
 tokio-util = { version = "0.7.11" }
 webbrowser = { version = "1.0.1" }
 

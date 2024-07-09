@@ -3,11 +3,13 @@ use eframe::egui::{Context, ScrollArea, TextEdit, Ui};
 use eframe::egui::Direction::TopDown;
 use egui::Align2;
 use egui_toast::Toasts;
-use crate::modules::hosting_services::general::extract_raw_links;
+use crate::modules::hosting_services::extract::extract_raw_links;
 
 #[derive(Default)]
 pub struct ExtractUI {
     toasts: Toasts,
+    // Channels
+    
     // Input
     hosting_links: String,
     recheck_validity: bool,
@@ -51,7 +53,7 @@ impl ExtractUI {
             // Extract button
             if ui.add_enabled(!self.extracting, egui::Button::new("Extract")).clicked() {
                 self.extracting = true;
-                extract_raw_links(self.hosting_links.clone());
+                extract_raw_links(self.hosting_links.clone(), self.recheck_validity);
             }
             
             // Extracting status
