@@ -20,7 +20,6 @@ impl MultiUpProjectLink {
     }
     pub async fn get_mirror_links(&self, browser: Browser) -> Vec<MultiUpMirrorLink> {
         let tab = browser.new_tab().unwrap();
-        println!("{}", self.return_project_link());
         let _ = tab.navigate_to(&self.return_project_link());
         match tab
             .wait_for_element_with_custom_timeout("#textarea-links-long", Duration::from_secs(60))
@@ -111,7 +110,6 @@ fn process_slug(slug: &str) -> (String, bool) {
 mod tests {
     use crate::modules::hosting_services::browser::new_browser;
     use crate::modules::hosting_services::multiup::links::{process_slug, MultiUpProjectLink};
-    use headless_chrome::Browser;
 
     #[test]
     fn test_process_slug() {
@@ -143,8 +141,14 @@ mod tests {
         );
 
         let mirror_links = project_link.get_mirror_links(browser).await;
-        for link in mirror_links {
-            println!("{}", link.id);
-        }
+        let mirror_links_ids: Vec<&str> =
+            mirror_links.iter().map(|link| link.id.as_str()).collect();
+        let known_mirror_links_ids = vec![
+            "2a807bab69041ce057e66f020d981044",
+            "d663190b183f6bdb2adc7cd3d28b719b",
+            "40132c0adfd89b387db8953fcf0db98e",
+        ];
+
+        assert_eq!(mirror_links_ids, known_mirror_links_ids);
     }
 }
