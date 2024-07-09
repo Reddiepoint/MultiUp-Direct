@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use eframe::egui::ViewportBuilder;
 
 use crate::modules::app::{DOCUMENTATION, MultiUpDirect, TabBar};
-use modules::ui::upload::upload::UploadType;
+// use modules::ui::upload::upload::UploadType;
 
 mod modules;
 
@@ -49,6 +49,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "MultiUp Direct",
         options,
-        Box::new(|cc| Ok(Box::<MultiUpDirect>::new(app))),
+        Box::new(|_cc| Box::<MultiUpDirect>::new(app)),
     )
 }

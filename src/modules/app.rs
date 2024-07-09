@@ -99,11 +99,11 @@ impl MultiUpDirect {
                 TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui)
             }
 
-            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
+/*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
             DebridUI::display_error_log(&mut self.debrid_ui, ctx);
             self.help_ui.show_help_window(ctx);
             self.help_ui.show_update_window(ctx);
-        });
+*/        });
     }
 }
 
