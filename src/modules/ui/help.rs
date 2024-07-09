@@ -1,9 +1,9 @@
-use std::thread;
+use crate::modules::app::{DOCUMENTATION, HOMEPAGE};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::{Button, Context, ScrollArea, Window};
 use self_update::update::Release;
 use self_update::version::bump_is_greater;
-use crate::modules::app::{DOCUMENTATION, HOMEPAGE};
+use std::thread;
 
 #[derive(Default)]
 pub enum UpdateStatus {
@@ -30,7 +30,7 @@ impl Default for HelpChannels {
             release_sender,
             release_receiver,
             update_status_sender,
-            update_status_receiver
+            update_status_receiver,
         }
     }
 }
@@ -105,119 +105,128 @@ impl HelpUI {
     }
 
     pub fn show_update_window(&mut self, ctx: &Context) {
-        Window::new("Updates").open(&mut self.show_update).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading({
-                    match &self.update_status {
-                        UpdateStatus::Unchecked | UpdateStatus::Checking => "Checking for updates...".to_string(),
-                        UpdateStatus::Outdated => "There is an update available!".to_string(),
-                        UpdateStatus::Updated => "You are up-to-date!".to_string(),
-                        UpdateStatus::Error(error) => format!("Update failed: {}", error)
-                    }
+        Window::new("Updates")
+            .open(&mut self.show_update)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading({
+                        match &self.update_status {
+                            UpdateStatus::Unchecked | UpdateStatus::Checking => {
+                                "Checking for updates...".to_string()
+                            }
+                            UpdateStatus::Outdated => "There is an update available!".to_string(),
+                            UpdateStatus::Updated => "You are up-to-date!".to_string(),
+                            UpdateStatus::Error(error) => format!("Update failed: {}", error),
+                        }
+                    });
+
+                    if let UpdateStatus::Checking = self.update_status {
+                        ui.spinner();
+                    };
                 });
 
-                if let UpdateStatus::Checking = self.update_status {
-                    ui.spinner();
-                };
-            });
+                ui.hyperlink_to("Homepage", HOMEPAGE);
 
-
-            ui.hyperlink_to("Homepage", HOMEPAGE);
-
-
-            match self.update_status {
-                UpdateStatus::Unchecked => {
-                    let release_sender = self.channels.release_sender.clone();
-                    thread::spawn(move || {
-                        match HelpUI::check_for_updates() {
-                            Ok(releases) => {
-                                let _ = release_sender.send(Ok(releases));
-                            },
-                            Err(error) => {
-                                let _ = release_sender.send(Err(error.to_string()));
-                            }
-                        };
-                    });
-                    self.update_status = UpdateStatus::Checking;
-                }
-
-                UpdateStatus::Checking => {
-                    if let Ok(update) = self.channels.release_receiver.try_recv() {
-                        match update {
-                            Ok(update) => {
-                                self.latest_version = update;
-
-                                if self.latest_version.1 {
-                                    self.update_status = UpdateStatus::Outdated;
-                                } else {
-                                    self.update_status = UpdateStatus::Updated;
+                match self.update_status {
+                    UpdateStatus::Unchecked => {
+                        let release_sender = self.channels.release_sender.clone();
+                        thread::spawn(move || {
+                            match HelpUI::check_for_updates() {
+                                Ok(releases) => {
+                                    let _ = release_sender.send(Ok(releases));
                                 }
-                            },
-                            Err(error) => {
-                                self.update_status = UpdateStatus::Error(error);
+                                Err(error) => {
+                                    let _ = release_sender.send(Err(error.to_string()));
+                                }
+                            };
+                        });
+                        self.update_status = UpdateStatus::Checking;
+                    }
+
+                    UpdateStatus::Checking => {
+                        if let Ok(update) = self.channels.release_receiver.try_recv() {
+                            match update {
+                                Ok(update) => {
+                                    self.latest_version = update;
+
+                                    if self.latest_version.1 {
+                                        self.update_status = UpdateStatus::Outdated;
+                                    } else {
+                                        self.update_status = UpdateStatus::Updated;
+                                    }
+                                }
+                                Err(error) => {
+                                    self.update_status = UpdateStatus::Error(error);
+                                }
                             }
                         }
                     }
-                },
-                _ => {}
-            };
+                    _ => {}
+                };
 
-            if let Ok(status) = self.channels.update_status_receiver.try_recv() {
-                match status {
-                    Ok(_) => {
-                        self.updating = false;
-                        self.updating_status = "success".to_string();
-                    }
-                    Err(error) => {
-                        self.updating = false;
-                        self.updating_status = error;
-                    }
-                }
-            }
-
-            if self.latest_version.1 {
-                ui.label(format!("Update available from v{} -> v{}", env!("CARGO_PKG_VERSION"), self.latest_version.0.version));
-                if ui.add_enabled(!self.updating, Button::new("Update")).clicked() {
-                    self.updating = true;
-                    let update_status_sender = self.channels.update_status_sender.clone();
-                    let release_sender = self.channels.release_sender.clone();
-                    thread::spawn(move || {
-                        match HelpUI::update() {
-                            Ok(app) => {
-                                let _ = update_status_sender.send(Ok(app));
-                            },
-                            Err(error) => {
-                                let _ = update_status_sender.send(Err(error.to_string()));
-                            }
-                        };
-
-                        match HelpUI::check_for_updates() {
-                            Ok(releases) => {
-                                let _ = release_sender.send(Ok(releases));
-                            },
-                            Err(error) => {
-                                let _ = release_sender.send(Err(error.to_string()));
-                            }
-                        };
-                    });
-                }
-
-                if !self.updating_status.is_empty() {
-                    if self.updating_status == "success" {
-                        ui.label("Please restart the application to use the latest version!");
-                    } else {
-                        ui.label(format!("Error updating creator: {}", self.updating_status));
+                if let Ok(status) = self.channels.update_status_receiver.try_recv() {
+                    match status {
+                        Ok(_) => {
+                            self.updating = false;
+                            self.updating_status = "success".to_string();
+                        }
+                        Err(error) => {
+                            self.updating = false;
+                            self.updating_status = error;
+                        }
                     }
                 }
 
-                if let Some(body) = &self.latest_version.0.body {
-                    if !body.is_empty() {
-                        ui.heading("What's New");
-                        ui.label(body);
+                if self.latest_version.1 {
+                    ui.label(format!(
+                        "Update available from v{} -> v{}",
+                        env!("CARGO_PKG_VERSION"),
+                        self.latest_version.0.version
+                    ));
+                    if ui
+                        .add_enabled(!self.updating, Button::new("Update"))
+                        .clicked()
+                    {
+                        self.updating = true;
+                        let update_status_sender = self.channels.update_status_sender.clone();
+                        let release_sender = self.channels.release_sender.clone();
+                        thread::spawn(move || {
+                            match HelpUI::update() {
+                                Ok(app) => {
+                                    let _ = update_status_sender.send(Ok(app));
+                                }
+                                Err(error) => {
+                                    let _ = update_status_sender.send(Err(error.to_string()));
+                                }
+                            };
+
+                            match HelpUI::check_for_updates() {
+                                Ok(releases) => {
+                                    let _ = release_sender.send(Ok(releases));
+                                }
+                                Err(error) => {
+                                    let _ = release_sender.send(Err(error.to_string()));
+                                }
+                            };
+                        });
+                    }
+
+                    if !self.updating_status.is_empty() {
+                        if self.updating_status == "success" {
+                            ui.label("Please restart the application to use the latest version!");
+                        } else {
+                            ui.label(format!("Error updating creator: {}", self.updating_status));
+                        }
+                    }
+
+                    if let Some(body) = &self.latest_version.0.body {
+                        if !body.is_empty() {
+                            ui.heading("What's New");
+                            ui.label(body);
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 
     fn check_for_updates() -> Result<(Release, bool), Box<dyn std::error::Error>> {
@@ -231,7 +240,8 @@ impl HelpUI {
             .build()?
             .get_latest_release()?;
 
-        let is_app_update_greater = bump_is_greater(&app_current_version, &multiup_direct_update.version).unwrap();
+        let is_app_update_greater =
+            bump_is_greater(&app_current_version, &multiup_direct_update.version).unwrap();
 
         Ok((multiup_direct_update, is_app_update_greater))
     }
@@ -243,7 +253,7 @@ impl HelpUI {
             .target(match std::env::consts::OS {
                 "linux" => "amd64",
                 "macos" => "darwin",
-                _ => ""
+                _ => "",
             })
             .bin_name("MultiUp-Direct")
             .show_download_progress(false)

@@ -1,6 +1,6 @@
-mod links;
-pub mod multiup;
-pub mod extract;
 mod browser;
 mod channels;
+pub mod extract;
 mod general;
+mod links;
+pub mod multiup;

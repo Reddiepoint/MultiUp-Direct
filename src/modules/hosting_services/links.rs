@@ -1,40 +1,101 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::io::ErrorKind;
+
 use headless_chrome::Browser;
+
 use crate::modules::hosting_services::multiup::links::{MultiUpMirrorLink, MultiUpProjectLink};
 
 /// Represents all the different types of hosting services.
 pub enum HostingServiceLink {
     MultiUpProject(MultiUpProjectLink),
     MultiUpMirror(MultiUpMirrorLink),
-    
 }
 
+impl HostingService for HostingServiceLink {
+    fn get_id(&self) -> &str {
+        match self {
+            HostingServiceLink::MultiUpProject(link) => link.get_id(),
+            HostingServiceLink::MultiUpMirror(link) => link.get_id(),
+        }
+    }
+
+    fn get_domain(&self) -> &str {
+        match self {
+            HostingServiceLink::MultiUpProject(link) => link.get_domain(),
+            HostingServiceLink::MultiUpMirror(link) => link.get_domain(),
+        }
+    }
+
+    fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
+        todo!()
+    }
+}
+
+impl PartialEq for HostingServiceLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_domain() == other.get_domain() && self.get_id() == other.get_id()
+    }
+}
 
 /// Represents the consolidated main download link.
-pub struct DownloadLink {
-    original_link: String,
-    size: f32,
-    size_unit: String,
-    direct_links: Vec<DirectLink>,
+#[derive(Debug)]
+pub struct LinkInformation {
+    pub original_link: String,
+    pub filename: String,
+    pub size: f32,
+    pub size_unit: String,
+    pub direct_links: Vec<DirectLink>,
+    pub status: Result<(), LinkError>,
 }
+
+impl LinkInformation {
+    pub fn new(
+        original_link: String,
+        filename: String,
+        size: f32,
+        size_unit: String,
+        direct_links: Vec<DirectLink>,
+        status: Result<(), LinkError>,
+    ) -> Self {
+        Self {
+            original_link,
+            filename,
+            size,
+            size_unit,
+            direct_links,
+            status,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct DirectLink {
-    
+    pub host: String,
+    pub link: String,
+    pub validity: String,
+}
+
+impl DirectLink {
+    pub fn new(host: String, link: String, validity: String) -> Self {
+        Self {
+            host,
+            link,
+            validity,
+        }
+    }
 }
 
 pub trait HostingService {
-    fn is_project(&self) -> bool {
-        false
-    }
-    fn get_direct_links(&self, browser: Browser) -> Vec<DirectLink>;
+    fn get_id(&self) -> &str;
+    fn get_domain(&self) -> &str;
+    fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation;
 }
 
 #[derive(Debug)]
 pub enum LinkError {
     TimedOut(String, u64),
     InvalidLink(String),
-    Unknown
+    Unknown,
 }
 
 impl Display for LinkError {
@@ -53,6 +114,4 @@ impl Display for LinkError {
     }
 }
 
-impl Error for LinkError {
-    
-}
+impl Error for LinkError {}

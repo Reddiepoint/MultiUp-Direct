@@ -1,15 +1,15 @@
+use eframe::egui::{menu, CentralPanel, Context, TopBottomPanel, Ui};
 use eframe::{App, Frame};
-use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
 
 use crate::modules::ui::debrid::debrid::DebridUI;
-use crate::modules::ui::help::HelpUI;
 use crate::modules::ui::extract::extract::ExtractUI;
+use crate::modules::ui::help::HelpUI;
 use crate::modules::ui::upload::upload::UploadUI;
 
 pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
-pub const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
-
+pub const DOCUMENTATION: &str =
+    "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
 
 /// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
@@ -44,7 +44,7 @@ impl MultiUpDirect {
     fn new(_cc: &eframe::CreationContext) -> Self {
         Self::default()
     }
-    
+
     /// Displays the top bar.
     ///
     /// This method is responsible for rendering the top bar of the application, which includes
@@ -81,12 +81,10 @@ impl MultiUpDirect {
                     ui.close_menu();
                 }
 
-
                 ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
             })
         });
     }
-
 
     /// Displays the central panel in the user interface based on the selected tab.
     ///
@@ -96,16 +94,14 @@ impl MultiUpDirect {
             match &self.tab_bar {
                 TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
                 TabBar::Debrid => DebridUI::display(ctx, ui, &mut self.debrid_ui),
-                TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui)
+                TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui),
             }
 
-/*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
-            DebridUI::display_error_log(&mut self.debrid_ui, ctx);
-            self.help_ui.show_help_window(ctx);
-            self.help_ui.show_update_window(ctx);
-*/        });
+            /*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
+                        DebridUI::display_error_log(&mut self.debrid_ui, ctx);
+                        self.help_ui.show_help_window(ctx);
+                        self.help_ui.show_update_window(ctx);
+            */
+        });
     }
 }
-
-
-

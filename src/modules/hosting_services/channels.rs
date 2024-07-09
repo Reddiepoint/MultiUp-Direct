@@ -1,2 +1,1 @@
-pub struct HostingServiceLinkChannels {
-}
+pub struct HostingServiceLinkChannels {}
