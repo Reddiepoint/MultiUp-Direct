@@ -1,14 +1,15 @@
+use std::sync::Arc;
 use std::time::Duration;
 
+use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
+use crate::modules::hosting_services::extract::recognise_links;
+use crate::modules::hosting_services::links::{
+    DirectLink, HostingService, HostingServiceLink, LinkInformation, LinkValidity,
+};
 use headless_chrome::Browser;
 use scraper::node::Element;
 use scraper::selectable::Selectable;
 use scraper::{Html, Selector};
-
-use crate::modules::hosting_services::extract::recognise_links;
-use crate::modules::hosting_services::links::{
-    DirectLink, HostingService, HostingServiceLink, LinkInformation,
-};
 
 pub struct MultiUpProjectLink {
     original_link: String,
@@ -24,6 +25,7 @@ impl HostingService for MultiUpProjectLink {
         "multiup.io"
     }
 
+    /// Unimplemented.
     fn get_link_information(&self, _browser: &Browser, _recheck_validity: bool) -> LinkInformation {
         unimplemented!()
     }
@@ -37,18 +39,17 @@ impl MultiUpProjectLink {
         format!("https://multiup.io/en/project/{}", self.id)
     }
 
-    pub async fn get_mirror_links(&self, browser: &Browser) -> Vec<MultiUpMirrorLink> {
-        let tab = browser.new_tab().unwrap();
-        let _ = tab.navigate_to(&self.return_project_link());
-        match tab
-            .wait_for_element_with_custom_timeout("#textarea-links-long", Duration::from_secs(10))
-        {
-            Ok(_) => {}
-            Err(error) => {
-                eprintln!("Error waiting for element: {}", error);
-                panic!()
-            }
-        };
+    pub fn get_mirror_links(&self, browser: &Browser) -> Vec<MultiUpMirrorLink> {
+        let tab = navigate_to_new_tab(browser, &self.return_project_link());
+        let _ = wait_for_element(&tab, "#textarea-links-long", None, None);
+        // match tab.wait_for_element("#textarea-links-long")
+        // {
+        //     Ok(_) => {}
+        //     Err(error) => {
+        //         eprintln!("Error waiting for element: {}", error);
+        //         panic!()
+        //     }
+        // };
         let page_html = match tab.get_content() {
             Ok(html) => html,
             Err(error) => {
@@ -81,6 +82,7 @@ impl MultiUpProjectLink {
     }
 }
 
+#[derive(Clone)]
 pub struct MultiUpMirrorLink {
     original_link: String,
     id: String,
@@ -98,27 +100,33 @@ impl HostingService for MultiUpMirrorLink {
     fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
         let mut link_information = LinkInformation::new(
             self.original_link.clone(),
+            "multiup.io".to_string(),
             String::new(),
             0.0,
             String::new(),
             Vec::new(),
             Ok(()),
         );
-        let tab = browser.new_tab().unwrap();
-        tab.navigate_to(&self.return_mirror_link()).unwrap();
-        if let Err(error) = tab.wait_for_element_with_custom_timeout(
+        let tab = navigate_to_new_tab(browser, &self.return_mirror_link());
+        let _ = wait_for_element(
+            &tab,
             "body > section > div > section > header > h2",
-            Duration::from_secs(30),
-        ) {
-            let _ = tab.reload(false, None);
-            if let Err(error) = tab.wait_for_element_with_custom_timeout(
-                "body > section > div > section > header > h2",
-                Duration::from_secs(10),
-            ) {
-                eprintln!("Error waiting for element: {}", error);
-                panic!(); // TODO: Return error
-            }
-        };
+            Some(5),
+            Some(5),
+        );
+        // if let Err(error) = tab.wait_for_element_with_custom_timeout(
+        //     "body > section > div > section > header > h2",
+        //     Duration::from_secs(10),
+        // ) {
+        //     let _ = tab.reload(false, None);
+        //     if let Err(error) = tab.wait_for_element_with_custom_timeout(
+        //         "body > section > div > section > header > h2",
+        //         Duration::from_secs(10),
+        //     ) {
+        //         eprintln!("Error waiting for element: {}", error);
+        //         panic!(); // TODO: Return error
+        //     }
+        // };
 
         let page_html = match tab.get_content() {
             Ok(html) => html,
@@ -146,7 +154,6 @@ impl HostingService for MultiUpMirrorLink {
         link_information.size_unit = size_unit;
         link_information.direct_links = direct_links;
         return link_information;
-        
     }
 }
 
@@ -158,6 +165,7 @@ impl MultiUpMirrorLink {
     pub fn return_mirror_link(&self) -> String {
         format!("https://multiup.io/en/mirror/{}", self.id)
     }
+
     fn parse_heading(heading: &str) -> (String, f32, String) {
         let parts: Vec<&str> = heading.split_whitespace().collect();
         let title = parts[3..parts.len() - 4].join(" ");
@@ -179,7 +187,12 @@ impl MultiUpMirrorLink {
         for button in buttons {
             let host = button.attr("namehost").unwrap().to_owned();
             let link = button.attr("link").unwrap().to_owned();
-            let validity = button.attr("validity").unwrap().to_owned();
+            let validity = button.attr("validity").unwrap();
+            let validity = match validity {
+                "valid" => LinkValidity::Valid,
+                "invalid" => LinkValidity::Invalid,
+                _ => LinkValidity::Unknown,
+            };
             direct_links.push(DirectLink::new(host, link, validity));
         }
 
@@ -215,13 +228,13 @@ fn process_slug(slug: &str) -> (String, bool) {
 mod tests {
     use std::time::Duration;
 
-    use scraper::{Html, Selector};
-
     use crate::modules::hosting_services::browser::new_browser;
-    use crate::modules::hosting_services::links::DirectLink;
+    use crate::modules::hosting_services::links::{DirectLink, LinkValidity};
     use crate::modules::hosting_services::multiup::links::{
         process_slug, MultiUpMirrorLink, MultiUpProjectLink,
     };
+    use scraper::{Html, Selector};
+    use LinkValidity::Valid;
 
     #[test]
     fn test_process_slug() {
@@ -252,7 +265,7 @@ mod tests {
             "170a7f224e7d146c7116dc377825a38c".to_string(),
         );
 
-        let mirror_links = project_link.get_mirror_links(&browser).await;
+        let mirror_links = project_link.get_mirror_links(&browser);
         let mirror_links_ids: Vec<&str> =
             mirror_links.iter().map(|link| link.id.as_str()).collect();
         let known_mirror_links_ids = vec![
@@ -295,7 +308,7 @@ mod tests {
         let known_direct_link = DirectLink::new(
             "1fichier.com".to_owned(),
             "https://1fichier.com/?5gzj5zubsqqt18y1s7gh&af=62851".to_owned(),
-            "valid".to_owned(),
+            Valid,
         );
         assert_eq!(direct_links[0].link, known_direct_link.link);
     }

@@ -2,12 +2,13 @@ use crate::modules::hosting_services::browser::new_browser;
 use crate::modules::hosting_services::links::{
     DirectLink, HostingService, HostingServiceLink, LinkInformation,
 };
+use crate::modules::hosting_services::mirrored::links::new_mirrored_link;
 use crate::modules::hosting_services::multiup::links::{new_multiup_link, MultiUpMirrorLink};
 use headless_chrome::Browser;
 use regex::Regex;
 use reqwest::Client;
 use std::sync::Arc;
-use std::thread;
+use std::{mem, thread};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
@@ -24,7 +25,14 @@ pub fn extract_raw_links(
                 recheck_validity, /*, cancel_receiver*/
             )
             .await;
-            println!("{:?}", download_links);
+            let mut final_download_links = Vec::new();
+            for download_link in download_links {
+                if !final_download_links.contains(&download_link) {
+                    final_download_links.push(download_link);
+                }
+            }
+            println!("{}", final_download_links.len());
+            println!("{:?}", final_download_links);
             // let _ = direct_links_sender.send(download_links);
         });
     });
@@ -43,10 +51,15 @@ pub fn recognise_links(raw_hosting_service_links: &str) -> Vec<HostingServiceLin
             "multiup.io" | "multiup.org" => {
                 let multiup_link = new_multiup_link(link.to_owned(), slug.to_owned());
                 if !detected_hoster_links.contains(&multiup_link) {
-                    detected_hoster_links.push(new_multiup_link(link.to_owned(), slug.to_owned()));
+                    detected_hoster_links.push(multiup_link);
                 }
             }
-            "mirrored.to" | "micr.cr" => todo!(),
+            "mirrored.to" | "micr.cr" => {
+                let mirrored_link = new_mirrored_link(link.to_owned(), slug.to_owned());
+                if !detected_hoster_links.contains(&mirrored_link) {
+                    detected_hoster_links.push(mirrored_link);
+                }
+            }
             _ => {}
         }
     }
@@ -61,11 +74,11 @@ async fn extract_download_links(
     let browser = new_browser();
     let semaphore = Arc::new(Semaphore::new(100));
     let mut tasks = Vec::new();
-    let client = Client::new();
+    // let client = Client::new();
     for link in hosting_service_links {
         match link {
             HostingServiceLink::MultiUpProject(project) => {
-                let mirror_links = project.get_mirror_links(&browser).await;
+                let mirror_links = project.get_mirror_links(&browser);
                 for mirror_link in mirror_links {
                     let browser = browser.clone();
                     let semaphore = Arc::clone(&semaphore);
@@ -76,10 +89,29 @@ async fn extract_download_links(
                     tasks.push(task);
                 }
             }
-            HostingServiceLink::MultiUpMirror(link) => {}
+            HostingServiceLink::MultiUpMirror(link) => {
+                let browser = browser.clone();
+                let semaphore = Arc::clone(&semaphore);
+                let link = link.to_owned();
+                let task = tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    link.get_link_information(&browser, recheck_validity)
+                });
+                tasks.push(task);
+            }
+            HostingServiceLink::Mirrored(link) => {
+                let browser = browser.clone();
+                let semaphore = Arc::clone(&semaphore);
+                let link = link.to_owned();
+                let task = tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    link.get_link_information(&browser, recheck_validity)
+                });
+                tasks.push(task);
+            }
         }
     }
-    
+
     let mut link_informations = Vec::new();
     let results = futures::future::join_all(tasks).await;
     for link in results {

@@ -3,12 +3,14 @@ use std::fmt::{Debug, Display, Formatter};
 
 use headless_chrome::Browser;
 
+use crate::modules::hosting_services::mirrored::links::MirroredLink;
 use crate::modules::hosting_services::multiup::links::{MultiUpMirrorLink, MultiUpProjectLink};
 
 /// Represents all the different types of hosting services.
 pub enum HostingServiceLink {
     MultiUpProject(MultiUpProjectLink),
     MultiUpMirror(MultiUpMirrorLink),
+    Mirrored(MirroredLink),
 }
 
 impl HostingService for HostingServiceLink {
@@ -16,6 +18,7 @@ impl HostingService for HostingServiceLink {
         match self {
             HostingServiceLink::MultiUpProject(link) => link.get_id(),
             HostingServiceLink::MultiUpMirror(link) => link.get_id(),
+            HostingServiceLink::Mirrored(link) => link.get_id(),
         }
     }
 
@@ -23,11 +26,13 @@ impl HostingService for HostingServiceLink {
         match self {
             HostingServiceLink::MultiUpProject(link) => link.get_domain(),
             HostingServiceLink::MultiUpMirror(link) => link.get_domain(),
+            HostingServiceLink::Mirrored(link) => link.get_domain(),
         }
     }
 
+    /// Unimplemented
     fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -41,6 +46,7 @@ impl PartialEq for HostingServiceLink {
 #[derive(Debug)]
 pub struct LinkInformation {
     pub original_link: String,
+    pub domain: String,
     pub filename: String,
     pub size: f32,
     pub size_unit: String,
@@ -48,9 +54,16 @@ pub struct LinkInformation {
     pub status: Result<(), LinkError>,
 }
 
+impl PartialEq for LinkInformation {
+    fn eq(&self, other: &Self) -> bool {
+        self.domain == other.domain && self.filename == other.filename
+    }
+}
+
 impl LinkInformation {
     pub fn new(
         original_link: String,
+        domain: String,
         filename: String,
         size: f32,
         size_unit: String,
@@ -59,6 +72,7 @@ impl LinkInformation {
     ) -> Self {
         Self {
             original_link,
+            domain,
             filename,
             size,
             size_unit,
@@ -72,17 +86,24 @@ impl LinkInformation {
 pub struct DirectLink {
     pub host: String,
     pub link: String,
-    pub validity: String,
+    pub validity: LinkValidity,
 }
 
 impl DirectLink {
-    pub fn new(host: String, link: String, validity: String) -> Self {
+    pub fn new(host: String, link: String, validity: LinkValidity) -> Self {
         Self {
             host,
             link,
             validity,
         }
     }
+}
+
+#[derive(Debug)]
+pub enum LinkValidity {
+    Valid,
+    Invalid,
+    Unknown,
 }
 
 pub trait HostingService {

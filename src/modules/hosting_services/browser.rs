@@ -1,6 +1,8 @@
+use crate::modules::hosting_services::links::LinkError;
+use headless_chrome::{Browser, Element, LaunchOptionsBuilder, Tab};
 use std::ffi::OsStr;
-
-use headless_chrome::{Browser, LaunchOptionsBuilder};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub fn new_browser() -> Browser {
     let launch_options = LaunchOptionsBuilder::default()
@@ -40,14 +42,49 @@ pub fn new_browser() -> Browser {
     return browser;
 }
 
+pub fn navigate_to_new_tab(browser: &Browser, url: &str) -> Arc<Tab> {
+    let tab = browser.new_tab().unwrap();
+    tab.navigate_to(url).unwrap();
+    return tab;
+}
+
+/// Waits for an element to appear on the page.
+///
+/// Duration is in seconds (default is 10 seconds).
+/// On retry, the tab will refresh the page and wait for the element (default is 0).
+pub fn wait_for_element<'a>(
+    tab: &'a Arc<Tab>,
+    selector: &'a str,
+    duration: Option<usize>,
+    retries: Option<usize>,
+) -> Result<Element<'a>, LinkError> {
+    let mut total_retries = 0;
+    let timeout = Duration::from_secs(duration.unwrap_or(10) as u64);
+    let mut error_message = None;
+    while total_retries <= retries.unwrap_or(0) {
+        println!("Waiting");
+        match tab.wait_for_element_with_custom_timeout(selector, timeout) {
+            Ok(element) => {
+                return Ok(element);
+            }
+            Err(error) => {
+                total_retries += 1;
+                let _ = tab.reload(false, None);
+                error_message = Some(error)
+            }
+        }
+    }
+    eprintln!("Error waiting for element: {}", error_message.unwrap());
+    panic!(); // TODO: Return error
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::modules::hosting_services::browser::new_browser;
+    use crate::modules::hosting_services::browser::{navigate_to_new_tab, new_browser};
 
     #[test]
-    fn test_open_tab() {
+    fn test_navigate_to_new_tab() {
         let browser = new_browser();
-        let tab = browser.new_tab().unwrap();
-        tab.navigate_to("https://google.com").unwrap();
+        let tab = navigate_to_new_tab(&browser, "https://google.com");
     }
 }
