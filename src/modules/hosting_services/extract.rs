@@ -4,12 +4,12 @@ use crate::modules::hosting_services::links::{
 };
 use crate::modules::hosting_services::mirrored::links::new_mirrored_link;
 use crate::modules::hosting_services::multiup::links::{new_multiup_link, MultiUpMirrorLink};
+use crossbeam_channel::Sender;
 use headless_chrome::Browser;
 use regex::Regex;
 use reqwest::Client;
 use std::sync::Arc;
 use std::{mem, thread};
-use crossbeam_channel::Sender;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
@@ -72,7 +72,8 @@ async fn extract_download_links(
     recheck_validity: bool,
 ) -> Vec<LinkInformation> {
     let browser = new_browser();
-    let semaphore = Arc::new(Semaphore::new(100));
+    let max_concurrent_tabs = 50;
+    let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
     let mut tasks = Vec::new();
     // let client = Client::new();
     for link in hosting_service_links {

@@ -113,20 +113,21 @@ impl ExtractUI {
                 self.search_query = String::new();
             }
         });
-
+        let height = ui.available_height() - 20.0;
         // Links and filter
         ui.horizontal(|ui| {
+            ui.set_height(height);
             ScrollArea::vertical()
                 .id_source("Link Information Box")
                 .max_width(0.8 * ui.available_width())
-                .max_height(ui.available_height() - 20.0)
+                .max_height(ui.available_height())
                 .show(ui, |ui| {
                     let mut link_table_information = vec![];
                     for link_information in &self.links_information {
                         if let Ok(()) = link_information.status {
                             // TODO: Add search logic (possibly regex)
                             let display_information = format!(
-                                "{} ({} {})",
+                                "{}\t({} {})",
                                 link_information.filename,
                                 link_information.size,
                                 link_information.size_unit

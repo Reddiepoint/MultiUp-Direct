@@ -32,7 +32,9 @@ impl HostingService for MirroredLink {
             wait_for_element(&tab, "caption", None, None);
         }
 
-        let validity_divs = tab.find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)").unwrap();
+        let validity_divs = tab
+            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
+            .unwrap();
 
         for div in &validity_divs {
             let button = div.find_element("a").unwrap();
@@ -50,7 +52,7 @@ impl HostingService for MirroredLink {
                 panic!(); // TODO: Return error
             }
         };
-        tab.close(false);
+        let _ = tab.close(true).unwrap();
         let document = Html::parse_document(&page_html);
         let direct_links = Self::grab_direct_links(&document, browser);
         let (filename, size, size_unit) = Self::get_metadata(&document);
@@ -74,32 +76,62 @@ impl MirroredLink {
 
     fn get_metadata(html: &Html) -> (String, f32, String) {
         let selector = Selector::parse("h3").unwrap();
-        let filename = html.select(&selector).next().unwrap().text().next().unwrap().to_owned();
+        let filename = html
+            .select(&selector)
+            .next()
+            .unwrap()
+            .text()
+            .next()
+            .unwrap()
+            .to_owned();
         let selector = Selector::parse("h6 > span").unwrap();
-        let size_full = html.select(&selector).next().unwrap().text().next().unwrap().to_owned();
-        let size = size_full.split_whitespace().next().unwrap().parse::<f32>().unwrap();
+        let size_full = html
+            .select(&selector)
+            .next()
+            .unwrap()
+            .text()
+            .next()
+            .unwrap()
+            .to_owned();
+        let size = size_full
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse::<f32>()
+            .unwrap();
         let size_unit = size_full.split_whitespace().last().unwrap().to_uppercase();
 
         return (filename, size, size_unit);
     }
     fn grab_direct_links(html: &Html, browser: &Browser) -> Vec<DirectLink> {
         let selector = Selector::parse("td > a[target='_blank']").unwrap();
-        let host_links: Vec<String> = html.select(&selector).map(|element| element.attr("href").unwrap()).map(Self::get_getlink_link).collect();
+        let host_links: Vec<String> = html
+            .select(&selector)
+            .map(|element| element.attr("href").unwrap())
+            .map(Self::get_getlink_link)
+            .collect();
         println!("{:?}", host_links);
-        let selector = Selector::parse("td[data-label='Link Status'] > span > div > div > em > b").unwrap();
-        let validities: Vec<LinkValidity> = html.select(&selector).map(|element| element.text().next().unwrap()).map(|validity| match validity {
-            "Online!" => LinkValidity::Valid,
-            "Offline" => LinkValidity::Invalid,
-            _ => LinkValidity::Unknown,
-        }).collect();
+        let selector =
+            Selector::parse("td[data-label='Link Status'] > span > div > div > em > b").unwrap();
+        let validities: Vec<LinkValidity> = html
+            .select(&selector)
+            .map(|element| element.text().next().unwrap())
+            .map(|validity| match validity {
+                "Online!" => LinkValidity::Valid,
+                "Offline" => LinkValidity::Invalid,
+                _ => LinkValidity::Unknown,
+            })
+            .collect();
         let hosts = host_links.iter().zip(validities);
-        let hosts: Vec<(String, LinkValidity)> = hosts.map(|(link, validity)| (link.to_owned(), validity)).collect();
+        let hosts: Vec<(String, LinkValidity)> = hosts
+            .map(|(link, validity)| (link.to_owned(), validity))
+            .collect();
         let direct_links = hosts.into_par_iter()
             .map(|(link, validity)| {
                 let tab = navigate_to_new_tab(browser, &link);
                 let _ = wait_for_element(&tab, "code", None, None);
                 let document = Html::parse_document(&tab.get_content().unwrap());
-                tab.close(false);
+                let _ = tab.close(false).unwrap();
 
                 let selector = Selector::parse("code").unwrap();
                 let link = document.select(&selector).next().unwrap().text().next().unwrap().to_owned();

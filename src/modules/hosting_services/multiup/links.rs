@@ -58,7 +58,7 @@ impl MultiUpProjectLink {
             }
         };
 
-        tab.close(false).unwrap();
+        tab.close(true).unwrap();
 
         let document = Html::parse_document(&page_html);
         let selector = Selector::parse("#textarea-links-long").unwrap();
@@ -136,7 +136,7 @@ impl HostingService for MultiUpMirrorLink {
             }
         };
 
-        let _ = tab.close(false).unwrap();
+        let _ = tab.close(true).unwrap();
 
         let document = Html::parse_document(&page_html);
         let selector = Selector::parse("body > section > div > section > header > h2").unwrap();
@@ -177,7 +177,7 @@ impl MultiUpMirrorLink {
 
     fn grab_direct_links(html: &Html) -> Vec<DirectLink> {
         let mut direct_links = Vec::new();
-        let selector = Selector::parse("button[type='submit']").unwrap();
+        let selector = Selector::parse("button[type='submit'], a.host").unwrap();
 
         let buttons: Vec<&Element> = html
             .select(&selector)
@@ -187,6 +187,9 @@ impl MultiUpMirrorLink {
         for button in buttons {
             let host = button.attr("namehost").unwrap().to_owned();
             let link = button.attr("link").unwrap().to_owned();
+            if link.starts_with("/") {
+                continue;
+            }
             let validity = button.attr("validity").unwrap();
             let validity = match validity {
                 "valid" => LinkValidity::Valid,
@@ -299,7 +302,7 @@ mod tests {
         );
         let page_html = tab.get_content().unwrap();
 
-        let _ = tab.close(false).unwrap();
+        let _ = tab.close(true).unwrap();
 
         let document = Html::parse_document(&page_html);
         let selector = Selector::parse("body > section > div > section > header > h2").unwrap();

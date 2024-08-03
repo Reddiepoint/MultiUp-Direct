@@ -10,32 +10,9 @@ pub fn new_browser() -> Browser {
     let launch_options = LaunchOptionsBuilder::default()
         .headless(false)
         .sandbox(true)
-        .disable_default_args(true)
-        .args({
-            let args = vec![
-                "--enable-features=NetworkService,NetworkServiceInProcess",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-breakpad",
-                "--disable-default-apps",
-                "--disable-dev-shm-usage",
-                "--disable-extensions",
-                // BlinkGenPropertyTrees disabled due to crbug.com/937609
-                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-                "--disable-hang-monitor",
-                "--disable-ipc-flooding-protection",
-                "--disable-popup-blocking",
-                "--disable-prompt-on-repost",
-                "--disable-renderer-backgrounding",
-                "--disable-sync",
-                "--force-color-profile=srgb",
-                "--metrics-recording-only",
-                "--no-first-run",
-                // "--enable-automation",
-                "--password-store=basic",
-                "--use-mock-keychain",
-                // "--no-startup-window",
-            ];
+        .devtools(false)
+        .ignore_default_args({
+            let args = vec!["--enable-automation"];
             args.into_iter().map(OsStr::new).collect()
         })
         .build()
@@ -50,6 +27,7 @@ pub fn new_browser() -> Browser {
 pub fn navigate_to_new_tab(browser: &Browser, url: &str) -> Arc<Tab> {
     let tab = browser.new_tab().unwrap();
     tab.navigate_to(url).unwrap();
+    tab.wait_until_navigated().unwrap();
     return tab;
 }
 
