@@ -41,7 +41,7 @@ impl App for MultiUpDirect {
 
 impl MultiUpDirect {
     /// Creates a new `MultiUpDirect` app.
-    fn new(_cc: &eframe::CreationContext) -> Self {
+    pub fn new(_cc: &eframe::CreationContext) -> Self {
         Self::default()
     }
 

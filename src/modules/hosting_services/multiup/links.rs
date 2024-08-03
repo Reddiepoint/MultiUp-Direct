@@ -111,7 +111,7 @@ impl HostingService for MultiUpMirrorLink {
         let _ = wait_for_element(
             &tab,
             "body > section > div > section > header > h2",
-            Some(5),
+            Some(20),
             Some(5),
         );
         // if let Err(error) = tab.wait_for_element_with_custom_timeout(

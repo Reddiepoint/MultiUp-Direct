@@ -16,10 +16,10 @@ opt-level = "s"
 [dependencies]
 async-recursion = { version = "1.1.1" }
 crossbeam-channel = { version = "0.5.13" }
-eframe = { version = "0.27.2" }
-egui_extras = { version = "0.27.2" }
-egui_file = "0.17.0"
-egui-toast = { version = "0.13.0" }
+eframe = { version = "0.28.1" }
+egui_extras = { version = "0.28.1" }
+egui_file = "0.18.0"
+egui-toast = { version = "0.14.0" }
 futures = { version = "0.3.30" }
 headless_chrome = { version = "1.0.10" }
 rayon = "1.10.0"

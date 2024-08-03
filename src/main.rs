@@ -10,7 +10,7 @@ use crate::modules::app::{MultiUpDirect, TabBar, DOCUMENTATION};
 mod modules;
 
 fn main() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions {
+    let native_options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
             .with_drag_and_drop(true)
             .with_resizable(true)
@@ -19,7 +19,7 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
-    let mut app = MultiUpDirect::default();
+    // let mut app = MultiUpDirect::default();
     /*    let args = std::env::args().collect::<Vec<String>>();
         if args.len() > 1 {
             if args[1] == "--help" {
@@ -48,7 +48,7 @@ fn main() -> Result<(), eframe::Error> {
     */
     eframe::run_native(
         "MultiUp Direct",
-        options,
-        Box::new(|_cc| Box::<MultiUpDirect>::new(app)),
+        native_options,
+        Box::new(|cc| Ok(Box::new(MultiUpDirect::new(cc)))),
     )
 }

@@ -9,13 +9,15 @@ use regex::Regex;
 use reqwest::Client;
 use std::sync::Arc;
 use std::{mem, thread};
+use crossbeam_channel::Sender;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
 pub fn extract_raw_links(
     raw_hosting_service_links: String,
     recheck_validity: bool,
-) -> Vec<LinkInformation> {
+    link_information_sender: Sender<Vec<LinkInformation>>,
+) {
     let hosting_service_links = recognise_links(&raw_hosting_service_links);
     let rt = Runtime::new().unwrap();
     thread::spawn(move || {
@@ -33,11 +35,9 @@ pub fn extract_raw_links(
             }
             println!("{}", final_download_links.len());
             println!("{:?}", final_download_links);
-            // let _ = direct_links_sender.send(download_links);
+            let _ = link_information_sender.send(final_download_links);
         });
     });
-
-    return vec![];
 }
 
 pub fn recognise_links(raw_hosting_service_links: &str) -> Vec<HostingServiceLink> {

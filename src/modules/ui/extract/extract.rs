@@ -1,20 +1,25 @@
-use crate::modules::hosting_services::extract::extract_raw_links;
+use crossbeam_channel::Receiver;
 use eframe::egui;
 use eframe::egui::Direction::TopDown;
-use eframe::egui::{Context, ScrollArea, TextEdit, Ui};
+use eframe::egui::{CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, Ui};
 use egui::Align2;
+use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
+
+use crate::modules::hosting_services::extract::extract_raw_links;
+use crate::modules::hosting_services::links::LinkInformation;
 
 #[derive(Default)]
 pub struct ExtractUI {
     toasts: Toasts,
     // Channels
-
+    links_receiver: Option<Receiver<Vec<LinkInformation>>>,
     // Input
     hosting_links: String,
     recheck_validity: bool,
     extracting: bool,
     // Output
+    links_information: Vec<LinkInformation>,
     search_query: String,
     // Footer
 }
@@ -24,12 +29,32 @@ impl ExtractUI {
         extract_ui.toasts = Toasts::new()
             .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
             .direction(TopDown);
-
         extract_ui.toasts.show(ctx);
+        extract_ui.receive_channels();
         extract_ui.display_input_area(ui);
         ui.separator();
         extract_ui.display_footer(ctx);
         extract_ui.display_output_area(ui);
+    }
+
+    fn receive_channels(&mut self) {
+        if let Some(links_receiver) = &self.links_receiver {
+            if let Ok(links_information) = links_receiver.try_recv() {
+                self.extracting = false;
+                self.links_information = links_information;
+                for link in &self.links_information {
+                    println!("{}", link.filename);
+                    println!(
+                        "{}",
+                        link.direct_links
+                            .iter()
+                            .map(|link| link.link.clone())
+                            .collect::<Vec<String>>()
+                            .join("\n")
+                    );
+                }
+            }
+        }
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
@@ -55,8 +80,14 @@ impl ExtractUI {
                 .add_enabled(!self.extracting, egui::Button::new("Extract"))
                 .clicked()
             {
+                let (links_sender, links_receiver) = crossbeam_channel::unbounded();
+                self.links_receiver = Some(links_receiver);
                 // self.extracting = true;
-                extract_raw_links(self.hosting_links.clone(), self.recheck_validity);
+                extract_raw_links(
+                    self.hosting_links.clone(),
+                    self.recheck_validity,
+                    links_sender,
+                );
             }
 
             // Extracting status
@@ -83,6 +114,65 @@ impl ExtractUI {
             }
         });
 
+        // Links and filter
+        ui.horizontal(|ui| {
+            ScrollArea::vertical()
+                .id_source("Link Information Box")
+                .max_width(0.8 * ui.available_width())
+                .max_height(ui.available_height() - 20.0)
+                .show(ui, |ui| {
+                    let mut link_table_information = vec![];
+                    for link_information in &self.links_information {
+                        if let Ok(()) = link_information.status {
+                            // TODO: Add search logic (possibly regex)
+                            let display_information = format!(
+                                "{} ({} {})",
+                                link_information.filename,
+                                link_information.size,
+                                link_information.size_unit
+                            );
+
+                            // TODO: Add interaction with links
+                            link_table_information.push((
+                                display_information,
+                                link_information.original_link.clone(),
+                                link_information
+                                    .direct_links
+                                    .iter()
+                                    .map(|link| link.link.clone())
+                                    .collect::<Vec<String>>(), // TODO: Filter links
+                            ));
+                        }
+                    }
+
+                    let heights = link_table_information
+                        .iter()
+                        .map(|(_name, _original_link, links)| 20.0 + links.len() as f32 * 20.0)
+                        .collect::<Vec<f32>>();
+
+                    ui.push_id("Link Information Table", |ui| {
+                        let width = ui.available_width();
+                        TableBuilder::new(ui)
+                            .column(Column::exact(width))
+                            .body(|body| {
+                                body.heterogeneous_rows(heights.into_iter(), |mut row| {
+                                    let row_index = row.index();
+                                    row.col(|ui| {
+                                        CollapsingHeader::new(&link_table_information[row_index].0)
+                                            .id_source(&link_table_information[row_index].1)
+                                            .default_open(true)
+                                            .open(Some(true))
+                                            .show(ui, |ui| {
+                                                for link in &link_table_information[row_index].2 {
+                                                    ui.add(Label::new(link).sense(Sense::click()));
+                                                }
+                                            });
+                                    });
+                                });
+                            });
+                    });
+                });
+        });
         // TODO: Write output links
     }
 

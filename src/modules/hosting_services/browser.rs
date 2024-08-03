@@ -1,8 +1,10 @@
-use crate::modules::hosting_services::links::LinkError;
-use headless_chrome::{Browser, Element, LaunchOptionsBuilder, Tab};
 use std::ffi::OsStr;
 use std::sync::Arc;
 use std::time::Duration;
+
+use headless_chrome::{Browser, Element, LaunchOptionsBuilder, Tab};
+
+use crate::modules::hosting_services::links::LinkError;
 
 pub fn new_browser() -> Browser {
     let launch_options = LaunchOptionsBuilder::default()
@@ -38,7 +40,10 @@ pub fn new_browser() -> Browser {
         })
         .build()
         .unwrap();
-    let browser = Browser::new(launch_options).unwrap();
+    let browser = match Browser::new(launch_options) {
+        Ok(browser) => browser,
+        Err(error) => panic!("An error occurred: {}", error),
+    };
     return browser;
 }
 
