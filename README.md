@@ -1,6 +1,6 @@
-# Homepage
+# Notice
 
-https://cs.rin.ru/forum/viewtopic.php?f=14&t=132189
+This project is being rewritten (ETA Q1 2025). Thank you for your patience.
 
 # Documentation
 
