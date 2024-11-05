@@ -63,7 +63,7 @@ impl Default for HelpUI {
 
 impl HelpUI {
     pub fn show_help_window(&mut self, ctx: &Context) {
-        Window::new("Help").open(&mut self.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_source("Help").show(ui, |ui| {
+        Window::new("Help").open(&mut self.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_salt("Help").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.hyperlink_to("Tips & Tricks and Extra Information", DOCUMENTATION);
                 ui.label("|");

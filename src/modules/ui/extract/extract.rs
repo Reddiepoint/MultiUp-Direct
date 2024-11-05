@@ -8,6 +8,7 @@ use egui_toast::Toasts;
 
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
+use crate::modules::ui::extract::filter::FilterMenu;
 
 #[derive(Default)]
 pub struct ExtractUI {
@@ -20,6 +21,7 @@ pub struct ExtractUI {
     extracting: bool,
     // Output
     links_information: Vec<LinkInformation>,
+    filter_menu: FilterMenu,
     search_query: String,
     // Footer
 }
@@ -53,6 +55,8 @@ impl ExtractUI {
                             .join("\n")
                     );
                 }
+                
+                self.filter_menu.update(&self.links_information);
             }
         }
     }
@@ -61,7 +65,7 @@ impl ExtractUI {
         ui.heading("Hosting Service Input Links");
 
         ScrollArea::both()
-            .id_source("Hosting Service Input Links Box")
+            .id_salt("Hosting Service Input Links Box")
             .max_height(ui.available_height() / 4.0)
             .show(ui, |ui| {
                 ui.add(
@@ -105,7 +109,7 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.add(
                 TextEdit::singleline(&mut self.search_query)
-                    .id_source("Filename Search Filter")
+                    .id_salt("Filename Search Filter")
                     .hint_text("Type to search for specific files"),
             );
 
@@ -118,7 +122,7 @@ impl ExtractUI {
         ui.horizontal(|ui| {
             ui.set_height(height);
             ScrollArea::vertical()
-                .id_source("Link Information Box")
+                .id_salt("Link Information Box")
                 .max_width(0.8 * ui.available_width())
                 .max_height(ui.available_height())
                 .show(ui, |ui| {
@@ -160,7 +164,7 @@ impl ExtractUI {
                                     let row_index = row.index();
                                     row.col(|ui| {
                                         CollapsingHeader::new(&link_table_information[row_index].0)
-                                            .id_source(&link_table_information[row_index].1)
+                                            .id_salt(&link_table_information[row_index].1)
                                             .default_open(true)
                                             .open(Some(true))
                                             .show(ui, |ui| {
@@ -173,6 +177,8 @@ impl ExtractUI {
                             });
                     });
                 });
+            
+            self.filter_menu.show(ui);
         });
         // TODO: Write output links
     }

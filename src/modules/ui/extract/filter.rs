@@ -1,13 +1,15 @@
-use std::collections::BTreeMap;
+use crate::modules::hosting_services::filter::get_info;
+use crate::modules::hosting_services::links::LinkInformation;
 use eframe::egui::{ScrollArea, Ui};
-use crate::modules::hosting_services::multiup::links::{DownloadLink, MultiUpLink};
 
 #[derive(Debug)]
 pub struct FilterMenu {
     pub valid: bool,
     pub invalid: bool,
     pub unknown: bool,
-    pub unchecked: bool,
+    pub valid_number: u32,
+    pub invalid_number: u32,
+    pub unknown_number: u32,
     pub hosts: Vec<(String, bool, u32)>,
 }
 
@@ -17,153 +19,185 @@ impl Default for FilterMenu {
             valid: true,
             invalid: false,
             unknown: false,
-            unchecked: false,
+            valid_number: 0,
+            invalid_number: 0,
+            unknown_number: 0,
             hosts: vec![],
         }
     }
 }
 
 impl FilterMenu {
-    pub fn show(&mut self, ui: &mut Ui, links: &Vec<MultiUpLink>) {
-        // Calculate number of each type
-        let mut valid: u32 = 0;
-        let mut invalid: u32 = 0;
-        let mut unknown: u32 = 0;
-        let mut unchecked: u32 = 0;
+    pub fn update(&mut self, links: &Vec<LinkInformation>) {
+        let (valid, invalid, unknown, hosts) = get_info(links);
+        self.valid_number = valid;
+        self.invalid_number = invalid;
+        self.unknown_number = unknown;
+        self.hosts = hosts.iter()
+            .map(|(host, count)| (host.clone(), true, *count))
+            .collect();
+    }
 
-        for link in links {
-            match link {
-                MultiUpLink::Project(project) => {
-                    if let Some(Ok(_)) = &project.status {
-                        for download_link in project.download_links.as_ref().unwrap() {
-                            if let Some(Ok(())) = &download_link.status {
-                                for link in download_link.direct_links.as_ref().unwrap() {
-                                    match link.validity.as_str() {
-                                        "valid" => valid += 1,
-                                        "invalid" => invalid += 1,
-                                        "unknown" => unknown += 1,
-                                        _ => unchecked += 1,
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                MultiUpLink::Download(download) => {
-                    if let Some(Ok(())) = &download.status {
-                        for link in download.direct_links.as_ref().unwrap() {
-                            match link.validity.as_str() {
-                                "valid" => valid += 1,
-                                "invalid" => invalid += 1,
-                                "unknown" => unknown += 1,
-                                _ => unchecked += 1,
-                            }
-                        }
-                    }
-
-                }
-            }
-        }
+    pub fn show(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
-            // ui.set_max_width(200.0);
-
-            ui.label("Host validity: ");
-            ui.checkbox(&mut self.valid, format!("Valid ({})", valid));
-            ui.checkbox(&mut self.invalid, format!("Invalid ({})", invalid));
-            ui.checkbox(&mut self.unknown, format!("Unknown ({})", unknown));
-            ui.checkbox(&mut self.unchecked, format!("Unchecked ({})", unchecked));
+            ui.label("Link validity: ");
+            ui.checkbox(&mut self.valid, format!("Valid ({})", self.valid_number));
+            ui.checkbox(&mut self.invalid, format!("Invalid ({})", self.invalid_number));
+            ui.checkbox(&mut self.unknown, format!("Unknown ({})", self.unknown_number));
 
             ui.separator();
 
-            ui.label("Show links for hosts: ");
-            if ui.button("Select all").clicked() {
-                for host in self.hosts.iter_mut() {
-                    if !host.1 {
-                        host.1 = true
-                    }
-                }
-            };
-            if ui.button("Deselect all").clicked() {
-                for host in self.hosts.iter_mut() {
-                    if host.1 {
-                        host.1 = false
-                    }
-                }
-            };
-
-            ui.separator();
-
-            ScrollArea::vertical().id_source("Host Filter").min_scrolled_height(ui.available_height()).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                for i in 0..self.hosts.len() {
-                    let host = &mut self.hosts[i];
-                    let host_name = &host.0.clone();
-                    let checkbox = ui.checkbox(&mut host.1, format!("{} ({})", host_name, host.2));
-                    checkbox.context_menu(|ui| {
-                        if ui.button(format!("Show {} links only", host_name)).clicked() {
-                            for host in self.hosts.iter_mut() {
-                                host.1 = &host.0 == host_name;
-                            };
-                            ui.close_menu();
-                        }
-                    });
+            ui.label("Hosts:");
+            ScrollArea::vertical().id_salt("Host Filter").show(ui, |ui| {
+                for (host, checked, count) in self.hosts.iter_mut() {
+                    ui.checkbox(checked, format!("{} ({})", host, count));
                 }
             });
         });
     }
-
-    pub fn update_hosts(&mut self, links: &Vec<MultiUpLink>) {
-        let mut hosts: BTreeMap<String, u32> = BTreeMap::new();
-        for link in links {
-            match link {
-                MultiUpLink::Project(project) => {
-                    if let Some(Ok(_)) = &project.status {
-                        for link in project.download_links.as_ref().unwrap() {
-                            if let Some(Ok(_)) = &link.status {
-                                for link in link.direct_links.as_ref().unwrap() {
-                                    hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
-                                }
-                            }
-
-                        }
-                    }
-                }
-                MultiUpLink::Download(download) => {
-                    if let Some(Ok(_)) = &download.status {
-                        if let Some(download_links) = download.direct_links.as_ref() {
-                            for link in download_links {
-                                hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        self.hosts = hosts.into_iter().map(|(host, count)| (host, true, count)).collect();
-    }
-    pub fn filter_links(&self, download_link: &DownloadLink) -> Vec<String> {
-        let displayed_links: Vec<String> = vec![];
-        return match &download_link.direct_links {
-            None => displayed_links,
-            Some(links) => {
-                links.iter()
-                    .filter(|link| {
-                        let host_check = self.hosts.iter().any(|(host_name, checked, _count)| {
-                           &link.host == host_name && *checked
-                        });
-
-                        let validity_match = match link.validity.as_str() {
-                            "valid" => self.valid,
-                            "invalid" => self.invalid,
-                            "unknown" => self.unknown,
-                            _ => self.unchecked,
-                        };
-
-                        host_check && validity_match
-                    })
-                    .map(|link| link.url.clone())
-                    .collect()
-            }
-        }
-    }
 }
+
+// impl FilterMenu {
+//     pub fn show(&mut self, ui: &mut Ui, links: &Vec<MultiUpLink>) {
+//         // Calculate number of each type
+//         let mut valid: u32 = 0;
+//         let mut invalid: u32 = 0;
+//         let mut unknown: u32 = 0;
+//         let mut unchecked: u32 = 0;
+//
+//         for link in links {
+//             match link {
+//                 MultiUpLink::Project(project) => {
+//                     if let Some(Ok(_)) = &project.status {
+//                         for download_link in project.download_links.as_ref().unwrap() {
+//                             if let Some(Ok(())) = &download_link.status {
+//                                 for link in download_link.direct_links.as_ref().unwrap() {
+//                                     match link.validity.as_str() {
+//                                         "valid" => valid += 1,
+//                                         "invalid" => invalid += 1,
+//                                         "unknown" => unknown += 1,
+//                                         _ => unchecked += 1,
+//                                     }
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//                 MultiUpLink::Download(download) => {
+//                     if let Some(Ok(())) = &download.status {
+//                         for link in download.direct_links.as_ref().unwrap() {
+//                             match link.validity.as_str() {
+//                                 "valid" => valid += 1,
+//                                 "invalid" => invalid += 1,
+//                                 "unknown" => unknown += 1,
+//                                 _ => unchecked += 1,
+//                             }
+//                         }
+//                     }
+//
+//                 }
+//             }
+//         }
+//         ui.vertical(|ui| {
+//             // ui.set_max_width(200.0);
+//
+//             ui.label("Host validity: ");
+//             ui.checkbox(&mut self.valid, format!("Valid ({})", valid));
+//             ui.checkbox(&mut self.invalid, format!("Invalid ({})", invalid));
+//             ui.checkbox(&mut self.unknown, format!("Unknown ({})", unknown));
+//             ui.checkbox(&mut self.unchecked, format!("Unchecked ({})", unchecked));
+//
+//             ui.separator();
+//
+//             ui.label("Show links for hosts: ");
+//             if ui.button("Select all").clicked() {
+//                 for host in self.hosts.iter_mut() {
+//                     if !host.1 {
+//                         host.1 = true
+//                     }
+//                 }
+//             };
+//             if ui.button("Deselect all").clicked() {
+//                 for host in self.hosts.iter_mut() {
+//                     if host.1 {
+//                         host.1 = false
+//                     }
+//                 }
+//             };
+//
+//             ui.separator();
+//
+//             ScrollArea::vertical().id_source("Host Filter").min_scrolled_height(ui.available_height()).show(ui, |ui| {
+//                 ui.set_width(ui.available_width());
+//                 for i in 0..self.hosts.len() {
+//                     let host = &mut self.hosts[i];
+//                     let host_name = &host.0.clone();
+//                     let checkbox = ui.checkbox(&mut host.1, format!("{} ({})", host_name, host.2));
+//                     checkbox.context_menu(|ui| {
+//                         if ui.button(format!("Show {} links only", host_name)).clicked() {
+//                             for host in self.hosts.iter_mut() {
+//                                 host.1 = &host.0 == host_name;
+//                             };
+//                             ui.close_menu();
+//                         }
+//                     });
+//                 }
+//             });
+//         });
+//     }
+//
+//     pub fn update_hosts(&mut self, links: &Vec<MultiUpLink>) {
+//         let mut hosts: BTreeMap<String, u32> = BTreeMap::new();
+//         for link in links {
+//             match link {
+//                 MultiUpLink::Project(project) => {
+//                     if let Some(Ok(_)) = &project.status {
+//                         for link in project.download_links.as_ref().unwrap() {
+//                             if let Some(Ok(_)) = &link.status {
+//                                 for link in link.direct_links.as_ref().unwrap() {
+//                                     hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+//                                 }
+//                             }
+//
+//                         }
+//                     }
+//                 }
+//                 MultiUpLink::Download(download) => {
+//                     if let Some(Ok(_)) = &download.status {
+//                         if let Some(download_links) = download.direct_links.as_ref() {
+//                             for link in download_links {
+//                                 hosts.entry(link.host.to_string()).and_modify(|count| *count += 1).or_insert(1);
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//         self.hosts = hosts.into_iter().map(|(host, count)| (host, true, count)).collect();
+//     }
+//     pub fn filter_links(&self, download_link: &DownloadLink) -> Vec<String> {
+//         let displayed_links: Vec<String> = vec![];
+//         return match &download_link.direct_links {
+//             None => displayed_links,
+//             Some(links) => {
+//                 links.iter()
+//                     .filter(|link| {
+//                         let host_check = self.hosts.iter().any(|(host_name, checked, _count)| {
+//                            &link.host == host_name && *checked
+//                         });
+//
+//                         let validity_match = match link.validity.as_str() {
+//                             "valid" => self.valid,
+//                             "invalid" => self.invalid,
+//                             "unknown" => self.unknown,
+//                             _ => self.unchecked,
+//                         };
+//
+//                         host_check && validity_match
+//                     })
+//                     .map(|link| link.url.clone())
+//                     .collect()
+//             }
+//         }
+//     }
+// }
