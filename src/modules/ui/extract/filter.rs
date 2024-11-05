@@ -1,5 +1,5 @@
 use crate::modules::hosting_services::filter::get_info;
-use crate::modules::hosting_services::links::LinkInformation;
+use crate::modules::hosting_services::links::{DirectLink, LinkInformation, LinkValidity};
 use eframe::egui::{ScrollArea, Ui};
 
 #[derive(Debug)]
@@ -33,7 +33,8 @@ impl FilterMenu {
         self.valid_number = valid;
         self.invalid_number = invalid;
         self.unknown_number = unknown;
-        self.hosts = hosts.iter()
+        self.hosts = hosts
+            .iter()
             .map(|(host, count)| (host.clone(), true, *count))
             .collect();
     }
@@ -42,18 +43,43 @@ impl FilterMenu {
         ui.vertical(|ui| {
             ui.label("Link validity: ");
             ui.checkbox(&mut self.valid, format!("Valid ({})", self.valid_number));
-            ui.checkbox(&mut self.invalid, format!("Invalid ({})", self.invalid_number));
-            ui.checkbox(&mut self.unknown, format!("Unknown ({})", self.unknown_number));
+            ui.checkbox(
+                &mut self.invalid,
+                format!("Invalid ({})", self.invalid_number),
+            );
+            ui.checkbox(
+                &mut self.unknown,
+                format!("Unknown ({})", self.unknown_number),
+            );
 
             ui.separator();
 
             ui.label("Hosts:");
-            ScrollArea::vertical().id_salt("Host Filter").show(ui, |ui| {
-                for (host, checked, count) in self.hosts.iter_mut() {
-                    ui.checkbox(checked, format!("{} ({})", host, count));
-                }
-            });
+            ScrollArea::vertical()
+                .id_salt("Host Filter")
+                .show(ui, |ui| {
+                    for (host, checked, count) in self.hosts.iter_mut() {
+                        ui.checkbox(checked, format!("{} ({})", host, count));
+                    }
+                });
         });
+    }
+
+    pub fn filter_link(&self, link: &DirectLink) -> bool {
+        for (host, checked, count) in &self.hosts {
+            if &link.host == host
+                && *checked
+                && match link.validity {
+                    LinkValidity::Valid => self.valid,
+                    LinkValidity::Invalid => self.invalid,
+                    LinkValidity::Unknown => self.unknown,
+                }
+            {
+                return true;
+            }
+        }
+
+        false
     }
 }
 

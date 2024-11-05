@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use crossbeam_channel::Receiver;
 use eframe::egui;
 use eframe::egui::Direction::TopDown;
@@ -7,6 +8,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
 
 use crate::modules::hosting_services::extract::extract_raw_links;
+use crate::modules::hosting_services::filter::filter_link;
 use crate::modules::hosting_services::links::LinkInformation;
 use crate::modules::ui::extract::filter::FilterMenu;
 
@@ -55,7 +57,7 @@ impl ExtractUI {
                             .join("\n")
                     );
                 }
-                
+
                 self.filter_menu.update(&self.links_information);
             }
         }
@@ -119,6 +121,7 @@ impl ExtractUI {
         });
         let height = ui.available_height() - 20.0;
         // Links and filter
+        // Links takes up 80% of width
         ui.horizontal(|ui| {
             ui.set_height(height);
             ScrollArea::vertical()
@@ -144,15 +147,16 @@ impl ExtractUI {
                                 link_information
                                     .direct_links
                                     .iter()
+                                    .filter(|link| self.filter_menu.filter_link(link))
                                     .map(|link| link.link.clone())
-                                    .collect::<Vec<String>>(), // TODO: Filter links
+                                    .collect::<BTreeSet<String>>(),
                             ));
                         }
                     }
-
+                    
                     let heights = link_table_information
                         .iter()
-                        .map(|(_name, _original_link, links)| 20.0 + links.len() as f32 * 20.0)
+                        .map(|(_name, _original_link, links)| 20.0 + links.len() as f32 * 18.0)
                         .collect::<Vec<f32>>();
 
                     ui.push_id("Link Information Table", |ui| {
@@ -177,7 +181,7 @@ impl ExtractUI {
                             });
                     });
                 });
-            
+
             self.filter_menu.show(ui);
         });
         // TODO: Write output links
