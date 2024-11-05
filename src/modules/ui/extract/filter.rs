@@ -1,81 +1,141 @@
-use crate::modules::hosting_services::filter::get_info;
+use std::collections::HashMap;
+use crate::modules::hosting_services::filter::{count_hosts, get_info};
 use crate::modules::hosting_services::links::{DirectLink, LinkInformation, LinkValidity};
 use eframe::egui::{ScrollArea, Ui};
 
+#[derive(Clone, Debug)]
+pub struct FilterHost {
+    name: String,
+    checked: bool,
+    count: u32,
+}
+
+impl FilterHost {
+    pub fn new(name: String, checked: bool, count: u32) -> Self {
+        FilterHost {
+            name,
+            checked,
+            count,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FilterMenu {
-    pub valid: bool,
-    pub invalid: bool,
-    pub unknown: bool,
+    pub valid_chosen: bool,
+    pub invalid_chosen: bool,
+    pub unknown_chosen: bool,
     pub valid_number: u32,
     pub invalid_number: u32,
     pub unknown_number: u32,
-    pub hosts: Vec<(String, bool, u32)>,
+    pub current_hosts: Vec<FilterHost>,
+    pub full_hosts: Vec<String>
 }
 
 impl Default for FilterMenu {
     fn default() -> Self {
         FilterMenu {
-            valid: true,
-            invalid: false,
-            unknown: false,
+            valid_chosen: true,
+            invalid_chosen: false,
+            unknown_chosen: false,
             valid_number: 0,
             invalid_number: 0,
             unknown_number: 0,
-            hosts: vec![],
+            current_hosts: vec![],
+            full_hosts: vec![],
         }
     }
 }
 
 impl FilterMenu {
-    pub fn update(&mut self, links: &Vec<LinkInformation>) {
+    pub fn update_from_link_information(&mut self, links: &Vec<LinkInformation>) {
         let (valid, invalid, unknown, hosts) = get_info(links);
         self.valid_number = valid;
         self.invalid_number = invalid;
         self.unknown_number = unknown;
-        self.hosts = hosts
+        let host_names = hosts.keys().map(|keys| keys.to_string()).collect();
+        let hosts: Vec<FilterHost> =  hosts
             .iter()
-            .map(|(host, count)| (host.clone(), true, *count))
+            .map(|(host, count)| FilterHost::new(host.clone(), true, *count))
             .collect();
+        
+        self.current_hosts = hosts.clone();
+        self.full_hosts = host_names;
+    }
+
+    pub fn update_from_link_list(&mut self, hosts: &Vec<String>) {
+        let hosts_count = count_hosts(hosts);
+        // println!("{:?}", hosts_count);
+        let mut new_hosts: Vec<FilterHost> = vec![];
+        for host in hosts_count.keys() {
+            match self.current_hosts.iter().find(|filter_host| &filter_host.name == host) {
+                Some(host) => {
+                    new_hosts.push(FilterHost::new(
+                        host.name.clone(),
+                        host.checked,
+                        *hosts_count.get(&host.name).unwrap(),
+                    ))
+                },
+                None => {
+                    new_hosts.push(FilterHost::new(
+                        host.to_string(),
+                        false,
+                        *hosts_count.get(host).unwrap(),
+                    ));
+                }
+            }
+        }
+        
+        self.current_hosts = new_hosts
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
             ui.label("Link validity: ");
-            ui.checkbox(&mut self.valid, format!("Valid ({})", self.valid_number));
+            ui.checkbox(&mut self.valid_chosen, format!("Valid ({})", self.valid_number));
             ui.checkbox(
-                &mut self.invalid,
+                &mut self.invalid_chosen,
                 format!("Invalid ({})", self.invalid_number),
             );
             ui.checkbox(
-                &mut self.unknown,
+                &mut self.unknown_chosen,
                 format!("Unknown ({})", self.unknown_number),
             );
 
             ui.separator();
-
+            // TODO: Add more filter selections for hosts
             ui.label("Hosts:");
             ScrollArea::vertical()
                 .id_salt("Host Filter")
                 .show(ui, |ui| {
-                    for (host, checked, count) in self.hosts.iter_mut() {
-                        ui.checkbox(checked, format!("{} ({})", host, count));
+                    for host in self.current_hosts.iter_mut() {
+                        ui.checkbox(&mut host.checked, format!("{} ({})", host.name, host.count));
                     }
                 });
         });
     }
 
-    pub fn filter_link(&self, link: &DirectLink) -> bool {
-        for (host, checked, count) in &self.hosts {
-            if &link.host == host
-                && *checked
-                && match link.validity {
-                    LinkValidity::Valid => self.valid,
-                    LinkValidity::Invalid => self.invalid,
-                    LinkValidity::Unknown => self.unknown,
-                }
-            {
-                return true;
+    pub fn filter_link(&self, link: &DirectLink, filter_host_checked: bool, filter_validity: bool) -> bool {
+        let mut host_check = HashMap::new();
+        for host in &self.current_hosts {
+            host_check.insert(&host.name, host.checked);
+        }
+        
+        for host in &self.full_hosts {
+            if link.host != host.as_str() {
+                continue;
+            }
+
+            if filter_host_checked && !host_check.get(&link.host).unwrap_or(&false) {
+                return false;
+            }
+
+            if filter_validity {
+                return match link.validity {
+                    LinkValidity::Valid => self.valid_chosen,
+                    LinkValidity::Invalid => self.invalid_chosen,
+                    LinkValidity::Unknown => self.unknown_chosen,
+                };
             }
         }
 

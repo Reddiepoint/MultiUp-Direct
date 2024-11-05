@@ -24,3 +24,14 @@ pub fn get_info(links: &Vec<LinkInformation>) -> (u32, u32, u32, BTreeMap<String
     
     (valid, invalid, unknown, hosts)
 }
+
+pub fn count_hosts(hosts: &Vec<String>) -> BTreeMap<String, u32> {
+    let mut count: BTreeMap<String, u32> = BTreeMap::new();
+    for host in hosts {
+        count
+            .entry(host.clone())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+    }
+    count
+}
