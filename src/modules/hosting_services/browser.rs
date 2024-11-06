@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::process::abort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +27,13 @@ pub fn new_browser() -> Browser {
 
 pub fn navigate_to_new_tab(browser: &Browser, url: &str) -> Arc<Tab> {
     let tab = browser.new_tab().unwrap();
-    tab.navigate_to(url).unwrap();
+    match tab.navigate_to(url) {
+        Ok(_) => {}
+        Err(error) => {
+            eprintln!("Error navigating to URL: {}", error);
+            tab.navigate_to(url);
+        }
+    };
     tab.wait_until_navigated().unwrap();
     return tab;
 }

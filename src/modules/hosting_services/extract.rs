@@ -72,7 +72,7 @@ async fn extract_download_links(
     recheck_validity: bool,
 ) -> Vec<LinkInformation> {
     let browser = new_browser();
-    let max_concurrent_tabs = 50;
+    let max_concurrent_tabs = 10;
     let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
     let mut tasks = Vec::new();
     // let client = Client::new();
@@ -116,7 +116,14 @@ async fn extract_download_links(
     let mut link_informations = Vec::new();
     let results = futures::future::join_all(tasks).await;
     for link in results {
-        link_informations.push(link.unwrap());
+        match link {
+            Ok(link) => {
+                link_informations.push(link);
+            }
+            Err(error) => {
+                eprintln!("Error: {}", error);
+            }
+        }
     }
     return link_informations;
 }

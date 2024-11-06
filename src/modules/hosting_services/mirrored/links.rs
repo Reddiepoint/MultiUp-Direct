@@ -1,4 +1,6 @@
-use headless_chrome::Browser;
+use std::sync::Arc;
+use eframe::egui::debug_text::print;
+use headless_chrome::{Browser, Tab};
 use rayon::prelude::*;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -25,26 +27,29 @@ impl HostingService for MirroredLink {
 
     fn get_link_information(&self, browser: &Browser, _recheck_validity: bool) -> LinkInformation {
         let tab = navigate_to_new_tab(browser, &self.original_link);
+        
+        // Click view file links button
         if !self.original_link.contains("?hash=") {
             let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
-
             element.click();
             wait_for_element(&tab, "caption", None, None);
         }
 
-        let validity_divs = tab
-            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
-            .unwrap();
+        // let validity_divs = tab
+        //     .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
+        //     .unwrap();
+        // 
+        // for div in &validity_divs {
+        //     let button = div.find_element("a").unwrap();
+        //     button.click();
+        // }
+        // 
+        // for div in &validity_divs {
+        //     div.wait_for_element("em");
+        // }
 
-        for div in &validity_divs {
-            let button = div.find_element("a").unwrap();
-            button.click();
-        }
-
-        for div in &validity_divs {
-            div.wait_for_element("em");
-        }
-
+        Self::click_check_link_status(&tab.clone());
+        
         let page_html = match tab.get_content() {
             Ok(html) => html,
             Err(error) => {
@@ -70,8 +75,29 @@ impl HostingService for MirroredLink {
 }
 
 impl MirroredLink {
+    fn click_check_link_status(tab: &Arc<Tab>) {
+        let validity_divs = tab
+            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
+            .unwrap();
+        
+        // validity_divs.par_iter().for_each(|div| {
+        //     let button = div.find_element("a").unwrap();
+        //     println!("Clicking button");
+        //     button.click();
+        // });
+        
+        for div in &validity_divs {
+            let button = div.find_element("a").unwrap();
+            println!("Clicking button");
+            button.click();
+        }
+        
+        for div in &validity_divs {
+            div.wait_for_element("em");
+        }
+    }
     fn get_getlink_link(get_link: &str) -> String {
-        format!("https://mirrored.to/{}", get_link)
+        format!("https://www.mirrored.to{}", get_link)
     }
 
     fn get_metadata(html: &Html) -> (String, f32, String) {
@@ -103,6 +129,7 @@ impl MirroredLink {
 
         return (filename, size, size_unit);
     }
+
     fn grab_direct_links(html: &Html, browser: &Browser) -> Vec<DirectLink> {
         let selector = Selector::parse("td > a[target='_blank']").unwrap();
         let host_links: Vec<String> = html
@@ -112,13 +139,13 @@ impl MirroredLink {
             .collect();
         println!("{:?}", host_links);
         let selector =
-            Selector::parse("td[data-label='Link Status'] > span > div > div > em > b").unwrap();
+            Selector::parse("td[data-label='Link Status'] > span > div > div > em").unwrap();
         let validities: Vec<LinkValidity> = html
             .select(&selector)
             .map(|element| element.text().next().unwrap())
             .map(|validity| match validity {
                 "Online!" => LinkValidity::Valid,
-                "Offline" => LinkValidity::Invalid,
+                "Offline!" => LinkValidity::Invalid,
                 _ => LinkValidity::Unknown,
             })
             .collect();
@@ -158,4 +185,55 @@ fn process_slug(slug: &str) -> String {
         }
     }
     panic!()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::modules::hosting_services::browser::{navigate_to_new_tab, new_browser, wait_for_element};
+    use crate::modules::hosting_services::links::HostingService;
+    use crate::modules::hosting_services::mirrored::links::{process_slug, MirroredLink};
+
+    #[test]
+    fn test_process_slug() {
+        let id = process_slug("https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links");
+        assert_eq!(id, "0KGTBMFK");
+    }
+
+    #[test]
+    fn test_get_getlink_link() {
+        let getlink_link = "/getlink/0KGTBMFK/31/?hid=VExta0VRVUtMeEY5WHd0eFlBZG1lTUwzR0xJdWkwVG5kS3pxcWorZXVUST0qOipJX7mX%2BILll7jRRIIRDYa4&tid=91b733d3e3a3797a93bc5095b7dab4c1";
+        let link = MirroredLink::get_getlink_link(getlink_link);
+        assert_eq!(link, "https://www.mirrored.to/getlink/0KGTBMFK/31/?hid=VExta0VRVUtMeEY5WHd0eFlBZG1lTUwzR0xJdWkwVG5kS3pxcWorZXVUST0qOipJX7mX%2BILll7jRRIIRDYa4&tid=91b733d3e3a3797a93bc5095b7dab4c1")
+    }
+    
+    #[test]
+    fn test_check_validities() {
+        let url = "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
+        let browser = new_browser();
+        let tab = navigate_to_new_tab(&browser, url);
+
+        // let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
+        // element.click();
+        // wait_for_element(&tab, "caption", None, None);
+        MirroredLink::click_check_link_status(&tab);
+    }
+
+    #[test]
+    fn test_get_link_information() {
+        for i in 0..10 {
+            println!("Iteration {}", i);
+            let url = "https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links";
+            let mirrored_link = MirroredLink {
+                original_link: url.to_string(),
+                id: "0KGTBMFK".to_string(),
+            };
+
+            let browser = new_browser();
+            // let tab = navigate_to_new_tab(&browser, url);
+            let link_information = mirrored_link.get_link_information(&browser, false);
+            println!("{:?}", link_information);
+            assert_eq!(link_information.direct_links.len(), 3);
+        }
+    }
 }

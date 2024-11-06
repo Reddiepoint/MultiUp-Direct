@@ -92,10 +92,10 @@ impl FilterMenu {
     pub fn show(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
             ui.label("Link validity: ");
-            ui.checkbox(&mut self.valid_chosen, format!("Valid ({})", self.valid_number));
+            ui.checkbox(&mut self.valid_chosen, format!("Online ({})", self.valid_number));
             ui.checkbox(
                 &mut self.invalid_chosen,
-                format!("Invalid ({})", self.invalid_number),
+                format!("Offline ({})", self.invalid_number),
             );
             ui.checkbox(
                 &mut self.unknown_chosen,
