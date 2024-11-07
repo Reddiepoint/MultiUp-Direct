@@ -69,34 +69,39 @@ impl MirroredLink {
         //         element.click();
         //     }
         // }
-        // 
+        //
         // wait_for_element(&tab, "#result", None, None);
         let element = wait_for_element(&tab, "a[href*='mirrored.to/files']", None, None).unwrap();
         let link = element.get_attribute_value("href").unwrap().unwrap();
         tab.navigate_to(&link);
-        wait_for_element(&tab, "#result", None, None);
     }
     fn click_check_link_status(tab: &Arc<Tab>) {
-        // TODO: Figure out why sometimes not all the statuses are checked
-        let validity_divs = tab
-            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
+        wait_for_element(&tab, "#result", None, None);
+        
+        let check_divs = tab
+            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000) > a")
             .unwrap();
-
+        
+        let check_button_code: Vec<String> = check_divs
+            .par_iter()
+            .map(|a| a.get_attribute_value("onclick").unwrap().unwrap())
+            .collect();
+        let checks = check_button_code.join(";");
+        let check = tab.evaluate(&checks, false);
+        
         // validity_divs.par_iter().for_each(|div| {
         //     let button = div.find_element("a").unwrap();
         //     println!("Clicking button");
         //     button.click();
         // });
 
-        for div in &validity_divs {
-            let button = div.find_element("a").unwrap();
-            println!("Clicking button");
-            button.click();
-        }
-
-        for div in &validity_divs {
+        // for div in &check_divs {
+        //     div.wait_for_element("em");
+        // }
+        
+        check_divs.par_iter().for_each(|div| {
             div.wait_for_element("em");
-        }
+        })
     }
     fn get_getlink_link(get_link: &str) -> String {
         format!("https://www.mirrored.to{}", get_link)
@@ -151,7 +156,7 @@ impl MirroredLink {
                 _ => LinkValidity::Unknown,
             })
             .collect();
-        assert_eq!(host_links.len(), validities.len());
+        assert_eq!(validities.len(), host_links.len());
         let hosts = host_links.iter().zip(validities);
         let hosts: Vec<(String, LinkValidity)> = hosts
             .map(|(link, validity)| (link.to_owned(), validity))
@@ -190,16 +195,18 @@ fn process_slug(slug: &str) -> String {
     panic!()
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::modules::hosting_services::browser::{navigate_to_new_tab, new_browser, wait_for_element};
+    use crate::modules::hosting_services::browser::{
+        navigate_to_new_tab, new_browser, wait_for_element,
+    };
     use crate::modules::hosting_services::links::HostingService;
     use crate::modules::hosting_services::mirrored::links::{process_slug, MirroredLink};
 
     #[test]
     fn test_process_slug() {
-        let id = process_slug("https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links");
+        let id =
+            process_slug("https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links");
         assert_eq!(id, "0KGTBMFK");
     }
 
@@ -222,17 +229,18 @@ mod tests {
             assert!(wait_for_element(&tab, "#result", None, None).is_ok());
         }
     }
-    
-    #[test]
-    fn test_check_validities() {
-        let url = "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
-        let browser = new_browser();
-        let tab = navigate_to_new_tab(&browser, url);
 
-        // let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
-        // element.click();
-        // wait_for_element(&tab, "caption", None, None);
-        MirroredLink::click_check_link_status(&tab);
+    #[test]
+    fn test_click_check_link_status() {
+        let url = "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
+        for i in 0..10 {
+            println!("Iteration {}", i);
+            let browser = new_browser();
+            let tab = navigate_to_new_tab(&browser, url);
+            MirroredLink::click_check_link_status(&tab);
+            let statuses = tab.find_elements("td[data-label='Link Status'] > span > div > div > em").unwrap();
+            assert_eq!(statuses.len(), 3);
+        }
     }
 
     #[test]
