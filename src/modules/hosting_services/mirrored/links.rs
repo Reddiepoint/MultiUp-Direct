@@ -1,9 +1,8 @@
-use std::sync::Arc;
-use eframe::egui::debug_text::print;
 use headless_chrome::{Browser, Tab};
 use rayon::prelude::*;
 use regex::Regex;
 use scraper::{Html, Selector};
+use std::sync::Arc;
 
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::links::{
@@ -27,29 +26,14 @@ impl HostingService for MirroredLink {
 
     fn get_link_information(&self, browser: &Browser, _recheck_validity: bool) -> LinkInformation {
         let tab = navigate_to_new_tab(browser, &self.original_link);
-        
+
         // Click view file links button
         if !self.original_link.contains("?hash=") {
-            let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
-            element.click();
-            wait_for_element(&tab, "caption", None, None);
+            Self::navigate_to_file_links(&tab);
         }
 
-        // let validity_divs = tab
-        //     .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
-        //     .unwrap();
-        // 
-        // for div in &validity_divs {
-        //     let button = div.find_element("a").unwrap();
-        //     button.click();
-        // }
-        // 
-        // for div in &validity_divs {
-        //     div.wait_for_element("em");
-        // }
+        Self::click_check_link_status(&tab);
 
-        Self::click_check_link_status(&tab.clone());
-        
         let page_html = match tab.get_content() {
             Ok(html) => html,
             Err(error) => {
@@ -75,23 +59,41 @@ impl HostingService for MirroredLink {
 }
 
 impl MirroredLink {
+    fn navigate_to_file_links(tab: &Arc<Tab>) {
+        // TODO: Figure out how to stop ads from interfering
+        // let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
+        // element.click();
+        // if let Ok(element) = wait_for_element(&tab, "ins", Some(5), None) {
+        //     // let element = wait_for_element(&tab, "button.secondary.larger", None, None).unwrap();
+        //     if let Ok(element) = tab.find_element("button.secondary.larger") {
+        //         element.click();
+        //     }
+        // }
+        // 
+        // wait_for_element(&tab, "#result", None, None);
+        let element = wait_for_element(&tab, "a[href*='mirrored.to/files']", None, None).unwrap();
+        let link = element.get_attribute_value("href").unwrap().unwrap();
+        tab.navigate_to(&link);
+        wait_for_element(&tab, "#result", None, None);
+    }
     fn click_check_link_status(tab: &Arc<Tab>) {
+        // TODO: Figure out why sometimes not all the statuses are checked
         let validity_divs = tab
             .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
             .unwrap();
-        
+
         // validity_divs.par_iter().for_each(|div| {
         //     let button = div.find_element("a").unwrap();
         //     println!("Clicking button");
         //     button.click();
         // });
-        
+
         for div in &validity_divs {
             let button = div.find_element("a").unwrap();
             println!("Clicking button");
             button.click();
         }
-        
+
         for div in &validity_divs {
             div.wait_for_element("em");
         }
@@ -149,6 +151,7 @@ impl MirroredLink {
                 _ => LinkValidity::Unknown,
             })
             .collect();
+        assert_eq!(host_links.len(), validities.len());
         let hosts = host_links.iter().zip(validities);
         let hosts: Vec<(String, LinkValidity)> = hosts
             .map(|(link, validity)| (link.to_owned(), validity))
@@ -205,6 +208,19 @@ mod tests {
         let getlink_link = "/getlink/0KGTBMFK/31/?hid=VExta0VRVUtMeEY5WHd0eFlBZG1lTUwzR0xJdWkwVG5kS3pxcWorZXVUST0qOipJX7mX%2BILll7jRRIIRDYa4&tid=91b733d3e3a3797a93bc5095b7dab4c1";
         let link = MirroredLink::get_getlink_link(getlink_link);
         assert_eq!(link, "https://www.mirrored.to/getlink/0KGTBMFK/31/?hid=VExta0VRVUtMeEY5WHd0eFlBZG1lTUwzR0xJdWkwVG5kS3pxcWorZXVUST0qOipJX7mX%2BILll7jRRIIRDYa4&tid=91b733d3e3a3797a93bc5095b7dab4c1")
+    }
+    #[test]
+    fn test_navigate_to_view_file_links() {
+        let url = "https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links";
+
+        for i in 0..10 {
+            println!("Iteration {}", i);
+            let browser = new_browser();
+            let tab = navigate_to_new_tab(&browser, url);
+            MirroredLink::navigate_to_file_links(&tab);
+
+            assert!(wait_for_element(&tab, "#result", None, None).is_ok());
+        }
     }
     
     #[test]

@@ -65,7 +65,8 @@ pub fn wait_for_element<'a>(
         }
     }
     eprintln!("Error waiting for element: {}", error_message.unwrap());
-    panic!(); // TODO: Return error
+    Err(LinkError::TimedOut(selector.to_string(), duration.unwrap_or(10) as u64))
+    // panic!(); // TODO: Return error
 }
 
 #[cfg(test)]
