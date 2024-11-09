@@ -1,15 +1,19 @@
-use crossbeam_channel::Receiver;
-use eframe::egui;
-use eframe::egui::Direction::TopDown;
-use eframe::egui::{CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui};
-use egui::Align2;
-use egui_extras::{Column, TableBuilder};
-use egui_toast::Toasts;
-use std::collections::{BTreeSet, HashSet};
-use regex::{Error, Regex};
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
 use crate::modules::ui::extract::filter::FilterMenu;
+use crossbeam_channel::Receiver;
+use eframe::egui;
+use eframe::egui::Direction::TopDown;
+use eframe::egui::{
+    CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui,
+};
+use egui::Align2;
+use egui_extras::{Column, TableBuilder};
+use egui_toast::Toasts;
+use regex::Regex;
+use std::collections::{BTreeSet, HashSet};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use crate::modules::other::{copy_to_clipboard, save_to_file};
 
 #[derive(Default)]
 pub struct ExtractUI {
@@ -25,6 +29,7 @@ pub struct ExtractUI {
     filter_menu: FilterMenu,
     search_query: String,
     selection_range: (Option<usize>, Option<usize>),
+    direct_links: Vec<String>,
     selected_links: HashSet<String>,
     // Footer
 }
@@ -59,7 +64,8 @@ impl ExtractUI {
                     );
                 }
 
-                self.filter_menu.update_from_link_information(&self.links_information);
+                self.filter_menu
+                    .update_from_link_information(&self.links_information);
             }
         }
     }
@@ -107,7 +113,8 @@ impl ExtractUI {
 
     fn display_output_area(&mut self, ui: &mut Ui) {
         // Process links
-        let mut filtered_links = vec![];
+        let mut filtered_links_hosts = vec![];
+        let mut direct_links: Vec<String> = vec![];
         let mut link_table_information = vec![];
         for link_information in &self.links_information {
             if let Ok(()) = link_information.status {
@@ -115,7 +122,7 @@ impl ExtractUI {
                     true => &link_information.filename,
                     false => &link_information.filename.to_lowercase(),
                 };
-                
+
                 if let Ok(search_regex) = Regex::new(&self.search_query) {
                     if !search_regex.is_match(filename) {
                         continue;
@@ -124,9 +131,7 @@ impl ExtractUI {
 
                 let display_information = format!(
                     "{}\t({} {})",
-                    link_information.filename,
-                    link_information.size,
-                    link_information.size_unit
+                    link_information.filename, link_information.size, link_information.size_unit
                 );
 
                 // TODO: Add interaction with links
@@ -137,20 +142,26 @@ impl ExtractUI {
                     .map(|link| link.link.clone())
                     .collect::<BTreeSet<String>>();
 
-                let mut link_count = link_information
+                let links: Vec<String> = links.into_iter().collect();
+                direct_links.append(&mut links.clone());
+
+                let mut hosts = link_information
                     .direct_links
                     .iter()
                     .filter(|link| self.filter_menu.filter_link(link, false, true))
                     .map(|link| link.host.clone())
                     .collect::<Vec<String>>();
 
-                filtered_links.append(&mut link_count);
-                link_table_information.push((display_information, &link_information.original_link, links));
+                filtered_links_hosts.append(&mut hosts);
+                link_table_information.push((
+                    display_information,
+                    &link_information.original_link,
+                    links,
+                ));
             }
         }
-        self.filter_menu.update_from_link_list(&filtered_links);
-
-
+        self.direct_links = direct_links;
+        self.filter_menu.update_from_link_list(&filtered_links_hosts);
 
         ui.heading("Extracted Links");
 
@@ -168,24 +179,56 @@ impl ExtractUI {
         });
 
         // Link buttons
+        let mut select_all = false;
+        let mut deselect_all = false;
         ui.horizontal(|ui| {
             if ui.button("Copy all").clicked() {
-
+                self.copy_all_links(&ui);
+            }
+            
+            if ui.button("Copy selected").clicked() {
+                self.copy_selected_links(&ui);
             }
 
             if ui.button("Select all").clicked() {
-
+                select_all = true;
             }
 
             if ui.button("Deselect all").clicked() {
-
+                deselect_all = true;
             }
 
-            if ui.button("Save as TXT").clicked() {
-
+            if ui.button("Save all as TXT").clicked() {
+                let text = self.direct_links.join("\n");
+                let current_time = SystemTime::now();
+                let time_stamp = current_time
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs();
+                println!("{:?}", time_stamp);
+                save_to_file(format!("extracted_links_{}.txt", time_stamp).as_str(), &text);
+            }
+            
+            if ui.button("Save selected as TXT").clicked() {
+                let text = self.selected_links.iter().cloned().collect::<Vec<String>>().join("\n");
+                let current_time = SystemTime::now();
+                let time_stamp = current_time
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs();
+                println!("{:?}", time_stamp);
+                save_to_file(format!("extracted_links_{}.txt", time_stamp).as_str(), &text);
+                
             }
         });
 
+        if select_all {
+            self.selected_links = self.direct_links.iter().cloned().collect();
+        } else if deselect_all {
+            self.selected_links.clear();
+        }
+
+        let mut link_labels = vec![];
         let height = ui.available_height() - 20.0;
         // Links and filter
         // Links takes up 80% of width
@@ -210,12 +253,17 @@ impl ExtractUI {
                                     let row_index = row.index();
                                     row.col(|ui| {
                                         CollapsingHeader::new(&link_table_information[row_index].0)
-                                            .id_salt(&link_table_information[row_index].1)
+                                            .id_salt(link_table_information[row_index].1)
                                             .default_open(true)
                                             .open(Some(true))
                                             .show(ui, |ui| {
                                                 for link in &link_table_information[row_index].2 {
-                                                    let label = ui.add(Label::new(link).sense(Sense::click()));
+                                                    let mut label = ui.add(Label::new(link).selectable(false).sense(Sense::click()));
+                                                    if self.selected_links.contains(link) {
+                                                        label = label.highlight();
+                                                    }
+
+                                                    link_labels.push((label, link));
                                                 }
                                             });
                                     });
@@ -226,6 +274,66 @@ impl ExtractUI {
 
             self.filter_menu.show(ui);
         });
+
+        // Link interactions
+        for (label, link) in link_labels {
+            // Selection
+            if label.clicked() {
+                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                if control_is_down {
+                    match self.selected_links.contains(link) {
+                        true => self.selected_links.remove(link),
+                        false => self.selected_links.insert(link.to_string())
+                    };
+                    self.selection_range = (None, None);
+                } else if shift_is_down {
+                    println!("{:?}", self.direct_links);
+                    println!("{}", link);
+                    let index = self.direct_links.iter().position(|direct_link| direct_link == link).unwrap();
+
+                    match self.selection_range.0 {
+                        None => {
+                            self.selection_range.0 = Some(index);
+                        }
+                        Some(start) => {
+                            if start > index {
+                                self.selection_range.0 = Some(index);
+                                self.selection_range.1 = Some(start);
+                            } else {
+                                self.selection_range.1 = Some(index);
+                            }
+                        }
+                    }
+                } else {
+                    let index = self.direct_links.iter().position(|direct_link| direct_link == link).unwrap();
+                    self.selection_range = (Some(index), None);
+                }
+
+                if self.selection_range.0.is_some() && self.selection_range.1.is_some() {
+                    let start = self.selection_range.0.unwrap();
+                    let end = self.selection_range.1.unwrap();
+                    for link in &self.direct_links[start..=end] {
+                        self.selected_links.insert(link.clone());
+                    }
+                }
+            }
+            
+            // Context menu
+            label.context_menu(|ui| {
+                if ui.button("Copy link").clicked() {
+                    copy_to_clipboard(ui, link.to_string());
+                }
+                
+                if !self.selected_links.is_empty() && ui.button("Copy selected links").clicked() {
+                    self.copy_selected_links(ui);
+                }
+                
+                if ui.button("Copy all links").clicked() {
+                    self.copy_all_links(ui);
+                }
+            });
+            // TODO: Add interaction with links
+        }
         // TODO: Write output links
     }
 
@@ -236,4 +344,14 @@ impl ExtractUI {
     }
 
     pub fn display_error_log(&mut self, ctx: &Context) {}
+    
+    fn copy_selected_links(&self, ui: &Ui) {
+        let links: Vec<String> = self.selected_links.iter().map(|link| link.clone()).collect();
+        copy_to_clipboard(ui, links.join("\n"));
+    }
+    
+    fn copy_all_links(&self, ui: &Ui) {
+        let links: Vec<String> = self.direct_links.iter().map(|link| link.clone()).collect();
+        copy_to_clipboard(ui, links.join("\n"));
+    }
 }

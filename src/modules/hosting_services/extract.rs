@@ -10,6 +10,7 @@ use regex::Regex;
 use reqwest::Client;
 use std::sync::Arc;
 use std::{mem, thread};
+use std::collections::BTreeMap;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
@@ -113,7 +114,7 @@ async fn extract_download_links(
         }
     }
 
-    let mut link_informations = Vec::new();
+    let mut link_informations: Vec<LinkInformation> = Vec::new();
     let results = futures::future::join_all(tasks).await;
     for link in results {
         match link {
@@ -125,5 +126,13 @@ async fn extract_download_links(
             }
         }
     }
-    return link_informations;
+    
+    println!("{:?}", link_informations);
+    let mut final_link_informations = BTreeMap::new();
+    for link_information in link_informations {
+        final_link_informations.insert(link_information.id.clone(), link_information);
+    }
+    
+    let link_informations = final_link_informations.into_values().collect();
+    link_informations
 }

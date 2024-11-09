@@ -47,6 +47,7 @@ impl PartialEq for HostingServiceLink {
 pub struct LinkInformation {
     pub original_link: String,
     pub domain: String,
+    pub id: String,
     pub filename: String,
     pub size: f32,
     pub size_unit: String,
@@ -64,6 +65,7 @@ impl LinkInformation {
     pub fn new(
         original_link: String,
         domain: String,
+        id: String,
         filename: String,
         size: f32,
         size_unit: String,
@@ -73,6 +75,7 @@ impl LinkInformation {
         Self {
             original_link,
             domain,
+            id,
             filename,
             size,
             size_unit,

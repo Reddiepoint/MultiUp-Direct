@@ -101,6 +101,7 @@ impl HostingService for MultiUpMirrorLink {
         let mut link_information = LinkInformation::new(
             self.original_link.clone(),
             "multiup.io".to_string(),
+            self.id.clone(),
             String::new(),
             0.0,
             String::new(),

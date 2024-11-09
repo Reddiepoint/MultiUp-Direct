@@ -46,15 +46,26 @@ impl HostingService for MirroredLink {
         let direct_links = Self::grab_direct_links(&document, browser);
         let (filename, size, size_unit) = Self::get_metadata(&document);
 
-        return LinkInformation {
-            original_link: self.original_link.clone(),
-            domain: self.get_domain().to_string(),
+        // return LinkInformation {
+        //     original_link: self.original_link.clone(),
+        //     domain: self.get_domain().to_string(),
+        //     filename,
+        //     id: self.id.to_string(),
+        //     size,
+        //     size_unit,
+        //     direct_links,
+        //     status: Ok(()),
+        // };
+        LinkInformation::new(
+            self.original_link.clone(),
+            self.get_domain().to_string(),
             filename,
+            self.id.to_string(),
             size,
             size_unit,
             direct_links,
-            status: Ok(()),
-        };
+            Ok(()),
+        )
     }
 }
 
@@ -76,19 +87,24 @@ impl MirroredLink {
         tab.navigate_to(&link);
     }
     fn click_check_link_status(tab: &Arc<Tab>) {
-        wait_for_element(&tab, "#result > div.col-sm > table > tbody > tr:nth-child(1) > td:nth-child(1)", None, None);
-        
+        wait_for_element(
+            &tab,
+            "#result > div.col-sm > table > tbody > tr:nth-child(1) > td:nth-child(1)",
+            None,
+            None,
+        );
+
         let check_divs = tab
             .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000) > a")
             .unwrap();
-        
+
         let check_button_code: Vec<String> = check_divs
             .par_iter()
             .map(|a| a.get_attribute_value("onclick").unwrap().unwrap())
             .collect();
         let checks = check_button_code.join(";");
         let check = tab.evaluate(&checks, false);
-        
+
         // validity_divs.par_iter().for_each(|div| {
         //     let button = div.find_element("a").unwrap();
         //     println!("Clicking button");
@@ -98,7 +114,7 @@ impl MirroredLink {
         // for div in &check_divs {
         //     div.wait_for_element("em");
         // }
-        
+
         check_divs.par_iter().for_each(|div| {
             div.wait_for_element("em");
         })
@@ -232,13 +248,16 @@ mod tests {
 
     #[test]
     fn test_click_check_link_status() {
-        let url = "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
+        let url =
+            "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
         for i in 0..10 {
             println!("Iteration {}", i);
             let browser = new_browser();
             let tab = navigate_to_new_tab(&browser, url);
             MirroredLink::click_check_link_status(&tab);
-            let statuses = tab.find_elements("td[data-label='Link Status'] > span > div > div > em").unwrap();
+            let statuses = tab
+                .find_elements("td[data-label='Link Status'] > span > div > div > em")
+                .unwrap();
             assert_eq!(statuses.len(), 3);
         }
     }
