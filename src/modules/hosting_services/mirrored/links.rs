@@ -76,7 +76,7 @@ impl MirroredLink {
         tab.navigate_to(&link);
     }
     fn click_check_link_status(tab: &Arc<Tab>) {
-        wait_for_element(&tab, "#result", None, None);
+        wait_for_element(&tab, "#result > div.col-sm > table > tbody > tr:nth-child(1) > td:nth-child(1)", None, None);
         
         let check_divs = tab
             .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000) > a")
