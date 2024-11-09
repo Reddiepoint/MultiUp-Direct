@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use crate::modules::hosting_services::filter::{count_hosts, get_info};
 use crate::modules::hosting_services::links::{DirectLink, LinkInformation, LinkValidity};
 use eframe::egui::{ScrollArea, Ui};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct FilterHost {
@@ -29,7 +29,7 @@ pub struct FilterMenu {
     pub invalid_number: u32,
     pub unknown_number: u32,
     pub current_hosts: Vec<FilterHost>,
-    pub full_hosts: Vec<String>
+    pub full_hosts: Vec<String>,
 }
 
 impl Default for FilterMenu {
@@ -54,11 +54,11 @@ impl FilterMenu {
         self.invalid_number = invalid;
         self.unknown_number = unknown;
         let host_names = hosts.keys().map(|keys| keys.to_string()).collect();
-        let hosts: Vec<FilterHost> =  hosts
+        let hosts: Vec<FilterHost> = hosts
             .iter()
             .map(|(host, count)| FilterHost::new(host.clone(), true, *count))
             .collect();
-        
+
         self.current_hosts = hosts.clone();
         self.full_hosts = host_names;
     }
@@ -75,7 +75,7 @@ impl FilterMenu {
                         host.checked,
                         *hosts_count.get(&host.name).unwrap(),
                     ))
-                },
+                }
                 None => {
                     new_hosts.push(FilterHost::new(
                         host.to_string(),
@@ -85,7 +85,7 @@ impl FilterMenu {
                 }
             }
         }
-        
+
         self.current_hosts = new_hosts
     }
 
@@ -103,13 +103,28 @@ impl FilterMenu {
             );
 
             ui.separator();
-            // TODO: Add more filter selections for hosts
             ui.label("Hosts:");
+            if ui.button("Select all").clicked() {
+                for host in self.current_hosts.iter_mut() {
+                    host.checked = true;
+                }
+            }
+            
             ScrollArea::vertical()
                 .id_salt("Host Filter")
                 .show(ui, |ui| {
-                    for host in self.current_hosts.iter_mut() {
-                        ui.checkbox(&mut host.checked, format!("{} ({})", host.name, host.count));
+                    for i in 0..self.current_hosts.len() {
+                        let host = &mut self.current_hosts[i];
+                        let checkbox = ui.checkbox(&mut host.checked, format!("{} ({})", &host.name, &host.count));
+                        let host_name = &host.name.clone();
+                        checkbox.context_menu(|ui| {
+                            if ui.button(format!("Show {} links only", host_name)).clicked() {
+                                for current_host in self.current_hosts.iter_mut() {
+                                    current_host.checked = &current_host.name == host_name;
+                                };
+                                ui.close_menu();
+                            }
+                        });
                     }
                 });
         });
@@ -120,7 +135,7 @@ impl FilterMenu {
         for host in &self.current_hosts {
             host_check.insert(&host.name, host.checked);
         }
-        
+
         for host in &self.full_hosts {
             if link.host != host.as_str() {
                 continue;
