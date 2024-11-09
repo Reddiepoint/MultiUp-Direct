@@ -1,4 +1,3 @@
-use std::collections::{BTreeMap, BTreeSet};
 use crossbeam_channel::Receiver;
 use eframe::egui;
 use eframe::egui::Direction::TopDown;
@@ -6,7 +5,8 @@ use eframe::egui::{CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit
 use egui::Align2;
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
-
+use std::collections::{BTreeSet, HashSet};
+use regex::{Error, Regex};
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
 use crate::modules::ui::extract::filter::FilterMenu;
@@ -24,6 +24,8 @@ pub struct ExtractUI {
     links_information: Vec<LinkInformation>,
     filter_menu: FilterMenu,
     search_query: String,
+    selection_range: (Option<usize>, Option<usize>),
+    selected_links: HashSet<String>,
     // Footer
 }
 
@@ -104,6 +106,52 @@ impl ExtractUI {
     }
 
     fn display_output_area(&mut self, ui: &mut Ui) {
+        // Process links
+        let mut filtered_links = vec![];
+        let mut link_table_information = vec![];
+        for link_information in &self.links_information {
+            if let Ok(()) = link_information.status {
+                let filename = match self.search_query.chars().any(|char| char.is_uppercase()) {
+                    true => &link_information.filename,
+                    false => &link_information.filename.to_lowercase(),
+                };
+                
+                if let Ok(search_regex) = Regex::new(&self.search_query) {
+                    if !search_regex.is_match(filename) {
+                        continue;
+                    }
+                };
+
+                let display_information = format!(
+                    "{}\t({} {})",
+                    link_information.filename,
+                    link_information.size,
+                    link_information.size_unit
+                );
+
+                // TODO: Add interaction with links
+                let links = link_information
+                    .direct_links
+                    .iter()
+                    .filter(|link| self.filter_menu.filter_link(link, true, true))
+                    .map(|link| link.link.clone())
+                    .collect::<BTreeSet<String>>();
+
+                let mut link_count = link_information
+                    .direct_links
+                    .iter()
+                    .filter(|link| self.filter_menu.filter_link(link, false, true))
+                    .map(|link| link.host.clone())
+                    .collect::<Vec<String>>();
+
+                filtered_links.append(&mut link_count);
+                link_table_information.push((display_information, &link_information.original_link, links));
+            }
+        }
+        self.filter_menu.update_from_link_list(&filtered_links);
+
+
+
         ui.heading("Extracted Links");
 
         // Filename search
@@ -111,13 +159,33 @@ impl ExtractUI {
             ui.add(
                 TextEdit::singleline(&mut self.search_query)
                     .id_salt("Filename Search Filter")
-                    .hint_text("Type to search for specific files"),
+                    .hint_text("Search... (supports regex and smart case)"),
             );
 
             if ui.button("Clear").clicked() {
                 self.search_query = String::new();
             }
         });
+
+        // Link buttons
+        ui.horizontal(|ui| {
+            if ui.button("Copy all").clicked() {
+
+            }
+
+            if ui.button("Select all").clicked() {
+
+            }
+
+            if ui.button("Deselect all").clicked() {
+
+            }
+
+            if ui.button("Save as TXT").clicked() {
+
+            }
+        });
+
         let height = ui.available_height() - 20.0;
         // Links and filter
         // Links takes up 80% of width
@@ -128,45 +196,6 @@ impl ExtractUI {
                 .max_width(0.8 * ui.available_width())
                 .max_height(ui.available_height())
                 .show(ui, |ui| {
-                    let mut link_table_information = vec![];
-                    let mut filtered_links = vec![];
-                    for link_information in &self.links_information {
-                        if let Ok(()) = link_information.status {
-                            // TODO: Add search logic (possibly regex)
-                            let display_information = format!(
-                                "{}\t({} {})",
-                                link_information.filename,
-                                link_information.size,
-                                link_information.size_unit
-                            );
-
-                            // TODO: Add interaction with links
-                            let links = link_information
-                                .direct_links
-                                .iter()
-                                .filter(|link| self.filter_menu.filter_link(link, true, true))
-                                .map(|link| link.link.clone())
-                                .collect::<BTreeSet<String>>();
-                            
-                            let mut link_count = link_information
-                                .direct_links
-                                .iter()
-                                .filter(|link| self.filter_menu.filter_link(link, false, true))
-                                .map(|link| link.host.clone())
-                                .collect::<Vec<String>>();
-                            
-                            filtered_links.append(&mut link_count);
-                            
-                            link_table_information.push((
-                                display_information,
-                                link_information.original_link.clone(),
-                                links,
-                            ));
-                        }
-                    }
-                    
-                    self.filter_menu.update_from_link_list(&filtered_links);
-                    
                     let heights = link_table_information
                         .iter()
                         .map(|(_name, _original_link, links)| 20.0 + links.len() as f32 * 18.0)
@@ -186,7 +215,7 @@ impl ExtractUI {
                                             .open(Some(true))
                                             .show(ui, |ui| {
                                                 for link in &link_table_information[row_index].2 {
-                                                    ui.add(Label::new(link).sense(Sense::click()));
+                                                    let label = ui.add(Label::new(link).sense(Sense::click()));
                                                 }
                                             });
                                     });
@@ -202,9 +231,9 @@ impl ExtractUI {
 
     fn display_footer(&mut self, ctx: &Context) {
         TopBottomPanel::bottom("Information Footer").show(ctx, |ui| {
-           ui.label(format!("Extracted links: {}", self.links_information.len())); 
+            ui.label(format!("Extracted links: {}", self.links_information.len()));
         });
     }
-    
+
     pub fn display_error_log(&mut self, ctx: &Context) {}
 }
