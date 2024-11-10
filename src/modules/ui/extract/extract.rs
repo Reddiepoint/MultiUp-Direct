@@ -12,7 +12,7 @@ use egui::Align2;
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
 use regex::Regex;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Default)]
@@ -28,9 +28,9 @@ pub struct ExtractUI {
     links_information: Vec<LinkInformation>,
     filter_menu: FilterMenu,
     search_query: String,
-    selection_range: (Option<usize>, Option<usize>),
-    direct_links: Vec<String>,
-    selected_links: HashSet<String>,
+    selection_range: (Option<(usize, usize)>, Option<(usize, usize)>),
+    direct_links: Vec<(String, BTreeSet<String>)>,
+    selected_links: HashMap<String, BTreeSet<String>>,
     // Footer
 }
 
@@ -114,7 +114,7 @@ impl ExtractUI {
     fn display_output_area(&mut self, ui: &mut Ui) {
         // Process links
         let mut filtered_links_hosts = vec![];
-        let mut direct_links: Vec<String> = vec![];
+        let mut direct_links = vec![];
         let mut link_table_information = vec![];
         for link_information in &self.links_information {
             if let Ok(()) = link_information.status {
@@ -142,8 +142,8 @@ impl ExtractUI {
                     .map(|link| link.link.clone())
                     .collect::<BTreeSet<String>>();
 
+                direct_links.push((link_information.id.clone(), links.clone()));
                 let links: Vec<String> = links.into_iter().collect();
-                direct_links.append(&mut links.clone());
 
                 let mut hosts = link_information
                     .direct_links
@@ -155,7 +155,7 @@ impl ExtractUI {
                 filtered_links_hosts.append(&mut hosts);
                 link_table_information.push((
                     display_information,
-                    &link_information.original_link,
+                    link_information,
                     links,
                 ));
             }
@@ -200,7 +200,18 @@ impl ExtractUI {
             }
 
             if ui.button("Save all as TXT").clicked() {
-                let text = self.direct_links.join("\n");
+                // TODO: Group links by ID
+                // let text = self.direct_links.iter().map(|a|).join("\n");
+                let mut text = String::new();
+                for (id, links) in &self.direct_links {
+                    let links = links.iter().cloned().collect::<Vec<String>>();
+                    let filename = &link_table_information.iter()
+                        .find(|(_display, link_information, _links)| &link_information.id == id)
+                        .unwrap()
+                        .1
+                        .filename;
+                    text = format!("{}// {}\n{}\n", text, filename, links.join("\n"));
+                }
                 let current_time = SystemTime::now();
                 let time_stamp = current_time
                     .duration_since(UNIX_EPOCH)
@@ -214,12 +225,16 @@ impl ExtractUI {
             }
 
             if ui.button("Save selected as TXT").clicked() {
-                let text = self
-                    .selected_links
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join("\n");
+                let mut text = String::new();
+                for (id, links) in &self.selected_links {
+                    let links = links.iter().cloned().collect::<Vec<String>>();
+                    let filename = &link_table_information.iter()
+                        .find(|(_display, link_information, _links)| &link_information.id == id)
+                        .unwrap()
+                        .1
+                        .filename;
+                    text = format!("{}// {}\n{}\n", text, filename, links.join("\n"));
+                }
                 let current_time = SystemTime::now();
                 let time_stamp = current_time
                     .duration_since(UNIX_EPOCH)
@@ -264,21 +279,25 @@ impl ExtractUI {
                                     let row_index = row.index();
                                     row.col(|ui| {
                                         CollapsingHeader::new(&link_table_information[row_index].0)
-                                            .id_salt(link_table_information[row_index].1)
+                                            .id_salt(&link_table_information[row_index].1.id)
                                             .default_open(true)
                                             .open(Some(true))
                                             .show(ui, |ui| {
-                                                for link in &link_table_information[row_index].2 {
+                                                let links = &link_table_information[row_index].2;
+                                                let id = &link_table_information[row_index].1.id;
+                                                for link in links {
                                                     let mut label = ui.add(
                                                         Label::new(link)
                                                             .selectable(false)
                                                             .sense(Sense::click()),
                                                     );
-                                                    if self.selected_links.contains(link) {
-                                                        label = label.highlight();
+                                                    if let Some(links) = self.selected_links.get(id) {
+                                                        if links.contains(link) {
+                                                            label = label.highlight();
+                                                        }
                                                     }
 
-                                                    link_labels.push((label, link));
+                                                    link_labels.push((label, id, link));
                                                 }
                                             });
                                     });
@@ -291,32 +310,46 @@ impl ExtractUI {
         });
 
         // Link interactions
-        for (label, link) in link_labels {
+        for (label, id, link) in link_labels {
             // Selection
             if label.clicked() {
                 let (control_is_down, shift_is_down) =
                     ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
                 if control_is_down {
-                    match self.selected_links.contains(link) {
-                        true => self.selected_links.remove(link),
-                        false => self.selected_links.insert(link.to_string()),
+                    let mut selected_direct_links = self.selected_links.get(id).cloned().unwrap_or_default();
+                    match selected_direct_links.contains(link) {
+                        true => {
+                            selected_direct_links.remove(link);
+                            self.selected_links.insert(id.to_string(), selected_direct_links.clone());
+                        }
+                        false => {
+                            selected_direct_links.insert(link.to_string());
+                            self.selected_links.insert(id.to_string(), selected_direct_links.clone());
+                        }
                     };
                     self.selection_range = (None, None);
                 } else if shift_is_down {
-                    println!("{:?}", self.direct_links);
-                    println!("{}", link);
-                    let index = self
-                        .direct_links
-                        .iter()
-                        .position(|direct_link| direct_link == link)
-                        .unwrap();
+                    let mut index = (0, 0);
+                    for (id_index, direct_links) in self.direct_links.iter().enumerate() {
+                        for (link_index, direct_link) in direct_links.1.iter().enumerate() {
+                            if direct_link == link {
+                                index = (id_index, link_index)
+                            }
+                        }
+                    }
+                    // let index = self
+                    //     .direct_links
+                    //     .iter()
+                    //     .flat_map(|(id, links)| links)
+                    //     .position(|direct_link| direct_link == link)
+                    //     .unwrap();
 
                     match self.selection_range.0 {
                         None => {
                             self.selection_range.0 = Some(index);
                         }
                         Some(start) => {
-                            if start > index {
+                            if start.0 >= index.0 || start.0 == index.0 && start.1 > index.1 {
                                 self.selection_range.0 = Some(index);
                                 self.selection_range.1 = Some(start);
                             } else {
@@ -325,19 +358,40 @@ impl ExtractUI {
                         }
                     }
                 } else {
-                    let index = self
-                        .direct_links
-                        .iter()
-                        .position(|direct_link| direct_link == link)
-                        .unwrap();
+                    let mut index = (0, 0);
+                    for (id_index, direct_links) in self.direct_links.iter().enumerate() {
+                        for (link_index, direct_link) in direct_links.1.iter().enumerate() {
+                            if direct_link == link {
+                                index = (id_index, link_index)
+                            }
+                        }
+                    }
                     self.selection_range = (Some(index), None);
                 }
 
                 if self.selection_range.0.is_some() && self.selection_range.1.is_some() {
                     let start = self.selection_range.0.unwrap();
                     let end = self.selection_range.1.unwrap();
-                    for link in &self.direct_links[start..=end] {
-                        self.selected_links.insert(link.clone());
+                    for (mut i, (id, links)) in self.direct_links[start.0..=end.0].iter().enumerate() {
+                        i += start.0;
+                        let mut selected_links = self.selected_links.get(id).cloned().unwrap_or_default();
+                        let links: Vec<String> = links.iter().cloned().collect();
+                        let mut links_to_insert = Vec::new();
+                        
+                        if i == start.0 && i == end.0 {
+                            links_to_insert = links[start.1..end.1].to_vec();
+                        } else if i == start.0 {
+                            links_to_insert = links[start.1..].to_vec();
+                        } else if i == end.0 {
+                            links_to_insert = links[..=end.1].to_vec();
+                        } else if start.0 < i && i < end.0 {
+                            links_to_insert = links.to_vec();
+                            
+                        }
+                        for link in links_to_insert {
+                            selected_links.insert(link);
+                        }
+                        self.selected_links.insert(id.to_string(), selected_links.clone());
                     }
                 }
             }
@@ -356,9 +410,7 @@ impl ExtractUI {
                     self.copy_all_links(ui);
                 }
             });
-            // TODO: Add interaction with links
         }
-        // TODO: Write output links
     }
 
     fn display_footer(&mut self, ctx: &Context) {
@@ -375,12 +427,12 @@ impl ExtractUI {
     pub fn display_error_log(&mut self, ctx: &Context) {}
 
     fn copy_selected_links(&self, ui: &Ui) {
-        let links: Vec<String> = self.selected_links.iter().cloned().collect();
+        let links: Vec<String> = self.selected_links.iter().flat_map(|(id, links)| links).cloned().collect();
         copy_to_clipboard(ui, links.join("\n"));
     }
 
     fn copy_all_links(&self, ui: &Ui) {
-        let links: Vec<String> = self.direct_links.iter().map(|link| link.clone()).collect();
+        let links: Vec<String> = self.direct_links.iter().flat_map(|(id, link)| link).cloned().collect();
         copy_to_clipboard(ui, links.join("\n"));
     }
 }
