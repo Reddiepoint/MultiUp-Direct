@@ -86,7 +86,7 @@ impl ExtractUI {
 
         ui.horizontal(|ui| {
             // Recheck validity checkbox
-            ui.checkbox(&mut self.recheck_validity, "Recheck validity");
+            // ui.checkbox(&mut self.recheck_validity, "Recheck validity");
 
             // Extract button
             if ui
