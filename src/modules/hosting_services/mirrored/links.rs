@@ -59,8 +59,8 @@ impl HostingService for MirroredLink {
         LinkInformation::new(
             self.original_link.clone(),
             self.get_domain().to_string(),
-            filename,
             self.id.to_string(),
+            filename,
             size,
             size_unit,
             direct_links,

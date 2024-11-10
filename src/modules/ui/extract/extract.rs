@@ -1,5 +1,6 @@
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
+use crate::modules::other::{copy_to_clipboard, save_to_file};
 use crate::modules::ui::extract::filter::FilterMenu;
 use crossbeam_channel::Receiver;
 use eframe::egui;
@@ -12,8 +13,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
 use regex::Regex;
 use std::collections::{BTreeSet, HashSet};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use crate::modules::other::{copy_to_clipboard, save_to_file};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Default)]
 pub struct ExtractUI {
@@ -161,7 +161,8 @@ impl ExtractUI {
             }
         }
         self.direct_links = direct_links;
-        self.filter_menu.update_from_link_list(&filtered_links_hosts);
+        self.filter_menu
+            .update_from_link_list(&filtered_links_hosts);
 
         ui.heading("Extracted Links");
 
@@ -185,7 +186,7 @@ impl ExtractUI {
             if ui.button("Copy all").clicked() {
                 self.copy_all_links(&ui);
             }
-            
+
             if ui.button("Copy selected").clicked() {
                 self.copy_selected_links(&ui);
             }
@@ -206,19 +207,29 @@ impl ExtractUI {
                     .expect("Time went backwards")
                     .as_secs();
                 println!("{:?}", time_stamp);
-                save_to_file(format!("extracted_links_{}.txt", time_stamp).as_str(), &text);
+                save_to_file(
+                    format!("extracted_links_{}.txt", time_stamp).as_str(),
+                    &text,
+                );
             }
-            
+
             if ui.button("Save selected as TXT").clicked() {
-                let text = self.selected_links.iter().cloned().collect::<Vec<String>>().join("\n");
+                let text = self
+                    .selected_links
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join("\n");
                 let current_time = SystemTime::now();
                 let time_stamp = current_time
                     .duration_since(UNIX_EPOCH)
                     .expect("Time went backwards")
                     .as_secs();
                 println!("{:?}", time_stamp);
-                save_to_file(format!("extracted_links_{}.txt", time_stamp).as_str(), &text);
-                
+                save_to_file(
+                    format!("extracted_links_{}.txt", time_stamp).as_str(),
+                    &text,
+                );
             }
         });
 
@@ -258,7 +269,11 @@ impl ExtractUI {
                                             .open(Some(true))
                                             .show(ui, |ui| {
                                                 for link in &link_table_information[row_index].2 {
-                                                    let mut label = ui.add(Label::new(link).selectable(false).sense(Sense::click()));
+                                                    let mut label = ui.add(
+                                                        Label::new(link)
+                                                            .selectable(false)
+                                                            .sense(Sense::click()),
+                                                    );
                                                     if self.selected_links.contains(link) {
                                                         label = label.highlight();
                                                     }
@@ -279,17 +294,22 @@ impl ExtractUI {
         for (label, link) in link_labels {
             // Selection
             if label.clicked() {
-                let (control_is_down, shift_is_down) = ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
+                let (control_is_down, shift_is_down) =
+                    ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
                 if control_is_down {
                     match self.selected_links.contains(link) {
                         true => self.selected_links.remove(link),
-                        false => self.selected_links.insert(link.to_string())
+                        false => self.selected_links.insert(link.to_string()),
                     };
                     self.selection_range = (None, None);
                 } else if shift_is_down {
                     println!("{:?}", self.direct_links);
                     println!("{}", link);
-                    let index = self.direct_links.iter().position(|direct_link| direct_link == link).unwrap();
+                    let index = self
+                        .direct_links
+                        .iter()
+                        .position(|direct_link| direct_link == link)
+                        .unwrap();
 
                     match self.selection_range.0 {
                         None => {
@@ -305,7 +325,11 @@ impl ExtractUI {
                         }
                     }
                 } else {
-                    let index = self.direct_links.iter().position(|direct_link| direct_link == link).unwrap();
+                    let index = self
+                        .direct_links
+                        .iter()
+                        .position(|direct_link| direct_link == link)
+                        .unwrap();
                     self.selection_range = (Some(index), None);
                 }
 
@@ -317,17 +341,17 @@ impl ExtractUI {
                     }
                 }
             }
-            
+
             // Context menu
             label.context_menu(|ui| {
                 if ui.button("Copy link").clicked() {
                     copy_to_clipboard(ui, link.to_string());
                 }
-                
+
                 if !self.selected_links.is_empty() && ui.button("Copy selected links").clicked() {
                     self.copy_selected_links(ui);
                 }
-                
+
                 if ui.button("Copy all links").clicked() {
                     self.copy_all_links(ui);
                 }
@@ -339,17 +363,22 @@ impl ExtractUI {
 
     fn display_footer(&mut self, ctx: &Context) {
         TopBottomPanel::bottom("Information Footer").show(ctx, |ui| {
-            ui.label(format!("Extracted links: {}", self.links_information.len()));
+            ui.label(format!(
+                "Extracted links: {} | Selected links: {}/{}",
+                self.links_information.len(),
+                self.selected_links.len(),
+                self.direct_links.len()
+            ));
         });
     }
 
     pub fn display_error_log(&mut self, ctx: &Context) {}
-    
+
     fn copy_selected_links(&self, ui: &Ui) {
-        let links: Vec<String> = self.selected_links.iter().map(|link| link.clone()).collect();
+        let links: Vec<String> = self.selected_links.iter().cloned().collect();
         copy_to_clipboard(ui, links.join("\n"));
     }
-    
+
     fn copy_all_links(&self, ui: &Ui) {
         let links: Vec<String> = self.direct_links.iter().map(|link| link.clone()).collect();
         copy_to_clipboard(ui, links.join("\n"));
