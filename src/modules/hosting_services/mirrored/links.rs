@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::sync::Arc;
-
+use std::time::Duration;
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::links::{
     DirectLink, HostingService, HostingServiceLink, LinkInformation, LinkValidity,
@@ -95,12 +95,12 @@ impl MirroredLink {
         );
 
         let check_divs = tab
-            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000) > a")
+            .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
             .unwrap();
 
         let check_button_code: Vec<String> = check_divs
             .par_iter()
-            .map(|a| a.get_attribute_value("onclick").unwrap().unwrap())
+            .map(|div| div.find_element("a").unwrap().get_attribute_value("onclick").unwrap().unwrap())
             .collect();
         let checks = check_button_code.join(";");
         let check = tab.evaluate(&checks, false);
@@ -116,7 +116,7 @@ impl MirroredLink {
         // }
 
         check_divs.par_iter().for_each(|div| {
-            div.wait_for_element("em");
+            div.wait_for_element_with_custom_timeout("div", Duration::from_secs(10));
         })
     }
     fn get_getlink_link(get_link: &str) -> String {
@@ -150,7 +150,7 @@ impl MirroredLink {
             .unwrap();
         let size_unit = size_full.split_whitespace().last().unwrap().to_uppercase();
 
-        return (filename, size, size_unit);
+        (filename, size, size_unit)
     }
 
     fn grab_direct_links(html: &Html, browser: &Browser) -> Vec<DirectLink> {
@@ -162,7 +162,7 @@ impl MirroredLink {
             .collect();
         println!("{:?}", host_links);
         let selector =
-            Selector::parse("td[data-label='Link Status'] > span > div > div > em").unwrap();
+            Selector::parse("td[data-label='Link Status'] > span > div > div").unwrap();
         let validities: Vec<LinkValidity> = html
             .select(&selector)
             .map(|element| element.text().next().unwrap())
@@ -256,7 +256,7 @@ mod tests {
             let tab = navigate_to_new_tab(&browser, url);
             MirroredLink::click_check_link_status(&tab);
             let statuses = tab
-                .find_elements("td[data-label='Link Status'] > span > div > div > em")
+                .find_elements("td[data-label='Link Status'] > span > div > div")
                 .unwrap();
             assert_eq!(statuses.len(), 3);
         }
