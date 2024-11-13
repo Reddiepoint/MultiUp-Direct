@@ -233,6 +233,9 @@ impl ExtractUI {
                 let mut links_text = String::new();
                 for (id, links) in &self.direct_links {
                     let links = links.iter().cloned().collect::<Vec<String>>();
+                    if links.is_empty() {
+                        continue;
+                    }
                     let filename = &link_table_information
                         .iter()
                         .find(|(_display, link_information, _links)| &link_information.id == id)
@@ -248,6 +251,10 @@ impl ExtractUI {
                     .as_secs();
                 println!("{:?}", time_stamp);
                 let text_file_name = format!("extracted_links_{}.txt", time_stamp);
+                if links_text.is_empty() {
+                    toast_type = ToastType::NoLinks;
+                    return;
+                }
                 save_to_file(&text_file_name, &links_text);
                 toast_type = ToastType::SaveAllAsTXT(text_file_name);
             }
