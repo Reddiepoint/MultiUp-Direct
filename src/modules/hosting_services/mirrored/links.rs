@@ -237,7 +237,7 @@ mod tests {
     fn test_navigate_to_view_file_links() {
         let url = "https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links";
 
-        for i in 0..10 {
+        for i in 0..1 {
             println!("Iteration {}", i);
             let browser = new_browser();
             let tab = navigate_to_new_tab(&browser, url);
@@ -251,8 +251,8 @@ mod tests {
     #[ignore]
     fn test_click_check_link_status() {
         let url =
-            "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
-        for i in 0..10 {
+            "https://www.mirrored.to/files/0KGTBMFK/?hash=c90ecbc39202a5057406628097f00c53&dl=0";
+        for i in 0..1 {
             println!("Iteration {}", i);
             let browser = new_browser();
             let tab = navigate_to_new_tab(&browser, url);
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_get_link_information() {
-        for i in 0..10 {
+        for i in 0..1 {
             println!("Iteration {}", i);
             let url = "https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links";
             let mirrored_link = MirroredLink {

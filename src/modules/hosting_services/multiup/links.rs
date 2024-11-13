@@ -294,6 +294,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_grab_direct_links() {
+        // Requires human interaction for Cloudflare
         let browser = new_browser();
 
         let tab = browser.new_tab().unwrap();
