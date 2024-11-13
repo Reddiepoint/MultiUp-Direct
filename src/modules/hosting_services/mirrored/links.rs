@@ -233,6 +233,7 @@ mod tests {
         assert_eq!(link, "https://www.mirrored.to/getlink/0KGTBMFK/31/?hid=VExta0VRVUtMeEY5WHd0eFlBZG1lTUwzR0xJdWkwVG5kS3pxcWorZXVUST0qOipJX7mX%2BILll7jRRIIRDYa4&tid=91b733d3e3a3797a93bc5095b7dab4c1")
     }
     #[test]
+    #[ignore]
     fn test_navigate_to_view_file_links() {
         let url = "https://www.mirrored.to/files/0KGTBMFK/Abc_news_radio_intro.mid_links";
 
@@ -247,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_click_check_link_status() {
         let url =
             "https://www.mirrored.to/files/0KGTBMFK/?hash=91b733d3e3a3797a93bc5095b7dab4c1&dl=1";
@@ -263,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_get_link_information() {
         for i in 0..10 {
             println!("Iteration {}", i);

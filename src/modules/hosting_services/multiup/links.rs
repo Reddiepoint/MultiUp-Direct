@@ -262,6 +262,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_project_get_mirror_links() {
         let browser = new_browser();
         let project_link = MultiUpProjectLink::new(
@@ -291,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_grab_direct_links() {
         let browser = new_browser();
 

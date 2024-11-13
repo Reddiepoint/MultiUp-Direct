@@ -74,6 +74,7 @@ mod tests {
     use crate::modules::hosting_services::browser::{navigate_to_new_tab, new_browser};
 
     #[test]
+    #[ignore]
     fn test_navigate_to_new_tab() {
         let browser = new_browser();
         let tab = navigate_to_new_tab(&browser, "https://google.com");
