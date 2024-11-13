@@ -1,1 +1,2 @@
-
+mod alldebrid;
+mod realdebrid;

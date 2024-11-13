@@ -77,6 +77,7 @@ async fn extract_download_links(
     let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
     let mut tasks = Vec::new();
     // let client = Client::new();
+    // TODO: Properly return errors
     for link in hosting_service_links {
         match link {
             HostingServiceLink::MultiUpProject(project) => {

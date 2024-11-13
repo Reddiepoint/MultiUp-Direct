@@ -1,19 +1,18 @@
+use crate::modules::general::{copy_to_clipboard, save_to_file};
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
 use crate::modules::ui::extract::filter::FilterMenu;
+use crate::modules::ui::toasts::{new_error_toast, new_info_toast, new_success_toast, new_toasts};
 use crossbeam_channel::Receiver;
 use eframe::egui;
-use eframe::egui::Direction::TopDown;
 use eframe::egui::{
     CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui,
 };
-use egui::Align2;
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::modules::general::{copy_to_clipboard, save_to_file};
 
 #[derive(Default)]
 pub struct ExtractUI {
@@ -36,15 +35,13 @@ pub struct ExtractUI {
 
 impl ExtractUI {
     pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
-        extract_ui.toasts = Toasts::new()
-            .anchor(Align2::RIGHT_TOP, (10.0, 10.0))
-            .direction(TopDown);
-        extract_ui.toasts.show(ctx);
+        extract_ui.toasts = new_toasts();
         extract_ui.receive_channels();
         extract_ui.display_input_area(ui);
         ui.separator();
         extract_ui.display_footer(ctx);
         extract_ui.display_output_area(ui);
+        extract_ui.toasts.show(ctx);
     }
 
     fn receive_channels(&mut self) {
@@ -66,6 +63,19 @@ impl ExtractUI {
 
                 self.filter_menu
                     .update_from_link_information(&self.links_information);
+
+                for link in &self.links_information {
+                    if link.status.is_err() {
+                        new_error_toast(&mut self.toasts, "Error extracting links.", None, None);
+                        return;
+                    }
+                }
+                new_success_toast(
+                    &mut self.toasts,
+                    "Successfully extracted links.",
+                    None,
+                    None,
+                );
             }
         }
     }
@@ -101,6 +111,7 @@ impl ExtractUI {
                     self.recheck_validity,
                     links_sender,
                 );
+                new_info_toast(&mut self.toasts, "Extracting links...", None, None);
             }
 
             // Extracting status
@@ -153,11 +164,7 @@ impl ExtractUI {
                     .collect::<Vec<String>>();
 
                 filtered_links_hosts.append(&mut hosts);
-                link_table_information.push((
-                    display_information,
-                    link_information,
-                    links,
-                ));
+                link_table_information.push((display_information, link_information, links));
             }
         }
         self.direct_links = direct_links;
@@ -182,13 +189,32 @@ impl ExtractUI {
         // Link buttons
         let mut select_all = false;
         let mut deselect_all = false;
+        enum ToastType {
+            CopyAll,
+            CopySelected,
+            SaveAllAsTXT(String),
+            SaveSelectedAsTXT(String),
+            NoLinks,
+            Nothing,
+        }
+        let mut toast_type = ToastType::Nothing;
         ui.horizontal(|ui| {
             if ui.button("Copy all").clicked() {
-                self.copy_all_links(&ui);
+                if self.direct_links.is_empty() {
+                    toast_type = ToastType::NoLinks;
+                    return;
+                }
+                self.copy_all_links(ui);
+                toast_type = ToastType::CopyAll;
             }
 
             if ui.button("Copy selected").clicked() {
-                self.copy_selected_links(&ui);
+                if self.selected_links.is_empty() {
+                    toast_type = ToastType::NoLinks;
+                    return;
+                }
+                self.copy_selected_links(ui);
+                toast_type = ToastType::CopySelected;
             }
 
             if ui.button("Select all").clicked() {
@@ -200,17 +226,20 @@ impl ExtractUI {
             }
 
             if ui.button("Save all as TXT").clicked() {
-                // TODO: Group links by ID
-                // let text = self.direct_links.iter().map(|a|).join("\n");
-                let mut text = String::new();
+                if self.direct_links.is_empty() {
+                    toast_type = ToastType::NoLinks;
+                    return;
+                }
+                let mut links_text = String::new();
                 for (id, links) in &self.direct_links {
                     let links = links.iter().cloned().collect::<Vec<String>>();
-                    let filename = &link_table_information.iter()
+                    let filename = &link_table_information
+                        .iter()
                         .find(|(_display, link_information, _links)| &link_information.id == id)
                         .unwrap()
                         .1
                         .filename;
-                    text = format!("{}// {}\n{}\n", text, filename, links.join("\n"));
+                    links_text = format!("{}// {}\n{}\n", links_text, filename, links.join("\n"));
                 }
                 let current_time = SystemTime::now();
                 let time_stamp = current_time
@@ -218,22 +247,26 @@ impl ExtractUI {
                     .expect("Time went backwards")
                     .as_secs();
                 println!("{:?}", time_stamp);
-                save_to_file(
-                    format!("extracted_links_{}.txt", time_stamp).as_str(),
-                    &text,
-                );
+                let text_file_name = format!("extracted_links_{}.txt", time_stamp);
+                save_to_file(&text_file_name, &links_text);
+                toast_type = ToastType::SaveAllAsTXT(text_file_name);
             }
 
             if ui.button("Save selected as TXT").clicked() {
-                let mut text = String::new();
+                if self.selected_links.is_empty() {
+                    toast_type = ToastType::NoLinks;
+                    return;
+                }
+                let mut links_text = String::new();
                 for (id, links) in &self.selected_links {
                     let links = links.iter().cloned().collect::<Vec<String>>();
-                    let filename = &link_table_information.iter()
+                    let filename = &link_table_information
+                        .iter()
                         .find(|(_display, link_information, _links)| &link_information.id == id)
                         .unwrap()
                         .1
                         .filename;
-                    text = format!("{}// {}\n{}\n", text, filename, links.join("\n"));
+                    links_text = format!("{}// {}\n{}\n", links_text, filename, links.join("\n"));
                 }
                 let current_time = SystemTime::now();
                 let time_stamp = current_time
@@ -241,10 +274,9 @@ impl ExtractUI {
                     .expect("Time went backwards")
                     .as_secs();
                 println!("{:?}", time_stamp);
-                save_to_file(
-                    format!("extracted_links_{}.txt", time_stamp).as_str(),
-                    &text,
-                );
+                let text_file_name = format!("extracted_links_{}.txt", time_stamp);
+                save_to_file(&text_file_name, &links_text);
+                toast_type = ToastType::SaveSelectedAsTXT(text_file_name);
             }
         });
 
@@ -253,7 +285,39 @@ impl ExtractUI {
         } else if deselect_all {
             self.selected_links.clear();
         }
-
+        match toast_type {
+            ToastType::CopyAll => new_info_toast(
+                &mut self.toasts,
+                "Copied all links to clipboard.",
+                None,
+                None,
+            ),
+            ToastType::CopySelected => new_info_toast(
+                &mut self.toasts,
+                "Copied selected links to clipboard.",
+                None,
+                None,
+            ),
+            ToastType::SaveAllAsTXT(filename) => new_info_toast(
+                &mut self.toasts,
+                format!("Saved all links to {}.", filename).as_str(),
+                None,
+                None,
+            ),
+            ToastType::SaveSelectedAsTXT(filename) => new_info_toast(
+                &mut self.toasts,
+                format!("Saved selected links to {}.", filename).as_str(),
+                None,
+                None,
+            ),
+            ToastType::NoLinks => new_info_toast(
+                &mut self.toasts,
+                "No links found.",
+                None,
+                None,
+            ),
+            ToastType::Nothing => {}
+        }
         let mut link_labels = vec![];
         let height = ui.available_height() - 20.0;
         // Links and filter
@@ -291,7 +355,8 @@ impl ExtractUI {
                                                             .selectable(false)
                                                             .sense(Sense::click()),
                                                     );
-                                                    if let Some(links) = self.selected_links.get(id) {
+                                                    if let Some(links) = self.selected_links.get(id)
+                                                    {
                                                         if links.contains(link) {
                                                             label = label.highlight();
                                                         }
@@ -316,15 +381,18 @@ impl ExtractUI {
                 let (control_is_down, shift_is_down) =
                     ui.ctx().input(|ui| (ui.modifiers.ctrl, ui.modifiers.shift));
                 if control_is_down {
-                    let mut selected_direct_links = self.selected_links.get(id).cloned().unwrap_or_default();
+                    let mut selected_direct_links =
+                        self.selected_links.get(id).cloned().unwrap_or_default();
                     match selected_direct_links.contains(link) {
                         true => {
                             selected_direct_links.remove(link);
-                            self.selected_links.insert(id.to_string(), selected_direct_links.clone());
+                            self.selected_links
+                                .insert(id.to_string(), selected_direct_links.clone());
                         }
                         false => {
                             selected_direct_links.insert(link.to_string());
-                            self.selected_links.insert(id.to_string(), selected_direct_links.clone());
+                            self.selected_links
+                                .insert(id.to_string(), selected_direct_links.clone());
                         }
                     };
                     self.selection_range = (None, None);
@@ -372,12 +440,15 @@ impl ExtractUI {
                 if self.selection_range.0.is_some() && self.selection_range.1.is_some() {
                     let start = self.selection_range.0.unwrap();
                     let end = self.selection_range.1.unwrap();
-                    for (mut i, (id, links)) in self.direct_links[start.0..=end.0].iter().enumerate() {
+                    for (mut i, (id, links)) in
+                        self.direct_links[start.0..=end.0].iter().enumerate()
+                    {
                         i += start.0;
-                        let mut selected_links = self.selected_links.get(id).cloned().unwrap_or_default();
+                        let mut selected_links =
+                            self.selected_links.get(id).cloned().unwrap_or_default();
                         let links: Vec<String> = links.iter().cloned().collect();
                         let mut links_to_insert = Vec::new();
-                        
+
                         if i == start.0 && i == end.0 {
                             links_to_insert = links[start.1..end.1].to_vec();
                         } else if i == start.0 {
@@ -386,12 +457,12 @@ impl ExtractUI {
                             links_to_insert = links[..=end.1].to_vec();
                         } else if start.0 < i && i < end.0 {
                             links_to_insert = links.to_vec();
-                            
                         }
                         for link in links_to_insert {
                             selected_links.insert(link);
                         }
-                        self.selected_links.insert(id.to_string(), selected_links.clone());
+                        self.selected_links
+                            .insert(id.to_string(), selected_links.clone());
                     }
                 }
             }
@@ -427,12 +498,22 @@ impl ExtractUI {
     pub fn display_error_log(&mut self, ctx: &Context) {}
 
     fn copy_selected_links(&self, ui: &Ui) {
-        let links: Vec<String> = self.selected_links.iter().flat_map(|(id, links)| links).cloned().collect();
+        let links: Vec<String> = self
+            .selected_links
+            .iter()
+            .flat_map(|(id, links)| links)
+            .cloned()
+            .collect();
         copy_to_clipboard(ui, links.join("\n"));
     }
 
     fn copy_all_links(&self, ui: &Ui) {
-        let links: Vec<String> = self.direct_links.iter().flat_map(|(id, link)| link).cloned().collect();
+        let links: Vec<String> = self
+            .direct_links
+            .iter()
+            .flat_map(|(id, link)| link)
+            .cloned()
+            .collect();
         copy_to_clipboard(ui, links.join("\n"));
     }
 }

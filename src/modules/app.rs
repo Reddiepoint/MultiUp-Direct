@@ -55,7 +55,7 @@ impl MultiUpDirect {
                 // Add tabs for each function
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
                 ui.selectable_value(&mut self.tab_bar, TabBar::Debrid, "Debrid");
-                ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
+                // ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
 
                 // Menu bar/toolbar elements
                 self.menu_bar(ui);
