@@ -1,6 +1,5 @@
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
-use crate::modules::other::{copy_to_clipboard, save_to_file};
 use crate::modules::ui::extract::filter::FilterMenu;
 use crossbeam_channel::Receiver;
 use eframe::egui;
@@ -14,6 +13,7 @@ use egui_toast::Toasts;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::modules::general::{copy_to_clipboard, save_to_file};
 
 #[derive(Default)]
 pub struct ExtractUI {
