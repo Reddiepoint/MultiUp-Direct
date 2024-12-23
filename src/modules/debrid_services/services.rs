@@ -1,19 +1,22 @@
 use crate::modules::config;
-use crate::modules::config::{Config, ConfigError};
-use crate::modules::debrid_services::links::recognise_links;
+use crate::modules::debrid_services::alldebrid;
+use crate::modules::debrid_services::links::{recognise_links, DebridServiceLink};
+use crossbeam_channel::Sender;
 
 #[derive(PartialEq)]
 pub enum DebridService {
-    AllDebrid,
-    RealDebrid,
+    AllDebrid(String),
+    RealDebrid(String),
 }
 
 impl DebridService {
-    pub fn unlock_links(&self, links: &str) {
+    pub fn unlock_links(&self, links: &str, link_sender: Sender<Vec<DebridServiceLink>>) {
         let links = recognise_links(links);
         match self {
-            DebridService::AllDebrid => {}
-            DebridService::RealDebrid => {}
+            DebridService::AllDebrid(api_key) => {
+                alldebrid::unlock_links(links, api_key.clone(), link_sender)
+            }
+            DebridService::RealDebrid(api_key) => {}
         }
     }
 }
@@ -22,19 +25,19 @@ impl Default for DebridService {
     fn default() -> Self {
         let config = config::read_config().unwrap_or_default();
         if let Some(key) = config.alldebrid_api_key {
-            DebridService::AllDebrid
+            DebridService::AllDebrid(key)
         } else if let Some(key) = config.real_debrid_api_key {
-            DebridService::RealDebrid
+            DebridService::RealDebrid(key)
         } else {
-            DebridService::AllDebrid
+            DebridService::AllDebrid(String::new())
         }
     }
 }
 impl DebridService {
     pub fn supports_remote_traffic(&self) -> bool {
         match self {
-            DebridService::AllDebrid => false,
-            DebridService::RealDebrid => true,
+            DebridService::AllDebrid(_) => false,
+            DebridService::RealDebrid(_) => true,
         }
     }
 }

@@ -1,12 +1,47 @@
+use std::fmt::Display;
 use regex::Regex;
 
-pub struct DebridServiceLinks {
+pub struct DebridServiceLink {
     pub link: String,
-    pub status: Result<(), DebridAPIError>,
+    pub status: Result<(), DebridError>,
+    pub original_link: String,
 }
 
-pub enum DebridAPIError {
-    Unknown
+impl DebridServiceLink {
+    pub fn new(link: String, status: Result<(), DebridError>, original_link: String) -> Self {
+        DebridServiceLink { link, status, original_link }
+    }
+}
+
+#[derive(Clone)]
+pub enum DebridError {
+    ReqwestError(String),
+    HostNotSupported,
+    HostDown,
+    LinkDown,
+    Unknown(String),
+}
+
+impl DebridError {
+    pub fn get_error_message(&self) -> String {
+        match self {
+            DebridError::ReqwestError(error) => {
+                format!("Reqwest error: {}", error)
+            }
+            DebridError::HostNotSupported => {
+                "Host not supported".to_string()
+            }
+            DebridError::HostDown => {
+                "Host down or under maintenance".to_string()
+            }
+            DebridError::LinkDown => {
+                "Link offline".to_string()
+            }
+            DebridError::Unknown(error) => {
+                format!("Unknown error: {}", error)
+            }
+        }
+    }
 }
 
 pub fn recognise_links(raw_links: &str) -> Vec<String> {
