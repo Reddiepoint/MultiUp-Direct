@@ -1,13 +1,24 @@
 use crate::modules::config;
 use crate::modules::config::{Config, ConfigError};
 
-#[derive(Default, PartialEq)]
+#[derive(PartialEq)]
 pub enum DebridService {
-    #[default]
     AllDebrid,
     RealDebrid,
 }
 
+impl Default for DebridService {
+    fn default() -> Self {
+        let config = config::read_config().unwrap_or_default();
+        if let Some(key) = config.all_debrid_api_key {
+            DebridService::AllDebrid
+        } else if let Some(key) = config.real_debrid_api_key {
+            DebridService::RealDebrid
+        } else {
+            DebridService::AllDebrid
+        }
+    }
+}
 impl DebridService {
     pub fn supports_remote_traffic(&self) -> bool {
         match self {
