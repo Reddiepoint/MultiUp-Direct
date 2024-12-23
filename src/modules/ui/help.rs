@@ -1,9 +1,10 @@
-use crate::modules::app::{DOCUMENTATION, HOMEPAGE};
+use crate::modules::app::{DOCUMENTATION, GITHUB, HOMEPAGE};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui::{Button, Context, ScrollArea, Window};
 use self_update::update::Release;
 use self_update::version::bump_is_greater;
 use std::thread;
+use crate::modules::config::{read_config, save_config};
 
 #[derive(Default)]
 pub enum UpdateStatus {
@@ -15,14 +16,14 @@ pub enum UpdateStatus {
     Error(String),
 }
 
-struct HelpChannels {
+struct UpdateChannels {
     pub release_sender: Sender<Result<(Release, bool), String>>,
     pub release_receiver: Receiver<Result<(Release, bool), String>>,
     pub update_status_sender: Sender<Result<(), String>>,
     pub update_status_receiver: Receiver<Result<(), String>>,
 }
 
-impl Default for HelpChannels {
+impl Default for UpdateChannels {
     fn default() -> Self {
         let (release_sender, release_receiver) = crossbeam_channel::bounded(1);
         let (update_status_sender, update_status_receiver) = crossbeam_channel::bounded(1);
@@ -38,7 +39,8 @@ impl Default for HelpChannels {
 pub struct HelpUI {
     pub show_help: bool,
     pub show_update: bool,
-    channels: HelpChannels,
+    check_for_update_on_startup: bool,
+    channels: UpdateChannels,
     update_status: UpdateStatus,
     latest_version: (Release, bool),
     updating: bool,
@@ -50,8 +52,9 @@ impl Default for HelpUI {
     fn default() -> Self {
         Self {
             show_help: false,
-            show_update: true,
-            channels: HelpChannels::default(),
+            show_update: read_config().unwrap_or_default().check_for_updates_on_startup,
+            check_for_update_on_startup: read_config().unwrap_or_default().check_for_updates_on_startup,
+            channels: UpdateChannels::default(),
             update_status: UpdateStatus::default(),
             latest_version: (Release::default(), false),
             updating: false,
@@ -65,42 +68,32 @@ impl HelpUI {
     pub fn show_help_window(&mut self, ctx: &Context) {
         Window::new("Help").open(&mut self.show_help).show(ctx, |ui| ScrollArea::vertical().min_scrolled_height(ui.available_height()).id_salt("Help").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.hyperlink_to("Tips & Tricks and Extra Information", DOCUMENTATION);
+                ui.hyperlink_to("Tips & Tricks and Documentation", DOCUMENTATION);
                 ui.label("|");
                 ui.hyperlink_to("Homepage", HOMEPAGE);
+                ui.label("|");
+                ui.hyperlink_to("GitHub", GITHUB);
             });
 
             ui.heading("Extract");
-            ui.label("Extracts direct links from MultiUp links.\n\n\
-            Link detection is quite robust, meaning you can paste in any page with links as well as HTML containing links. \
+            ui.label("Extracts direct links from MultiUp or Mirrored.\n\n\
+            Links are detected using RegEx, so more complicated text such as HTML can be pasted. \
             Duplicate links will be filtered out, excluding links in projects.\n\n\
-            If you want the validity of the hosts to be checked by MultiUp, enable \"Recheck link validity,\" \
-            otherwise, the original values from the site will be used. However, generation times may take much longer if this is enabled.\n\n\
-            You can select direct links by using combinations of CTRL and SHIFT and clicking and search for file names.");
+            Use CTRL and SHIFT to quickly select multiple links.");
 
             ui.separator();
 
             ui.heading("Debrid");
-            ui.label("Unlocks links using a Debrid service.\n\n\
-            Currently supports AllDebrid and RealDebrid.\n\
-            To read the keys from a file, create \"api_key.json\" in the same directory as this app with the following structure:");
-            let mut json_example = "\
-            {\n\
-                \t\"all_debrid\": \"YOUR_ALLDEBRID_API_KEY\",\n\
-                \t\"real_debrid\": \"YOUR_REALDEBRID_API_KEY\"\n\
-            }";
-            ui.code_editor(&mut json_example);
-            ui.label("You can choose to omit any field here (i.e. only have all_debrid or real_debrid) \
-            if you do not have an API key for the service.");
-
-            ui.separator();
-
-            ui.heading("Upload");
-            ui.label("Uploads content to MultiUp.\n\n\
-            Remote uploaded with data streaming enabled allows for better support of different sites, including Debrid services. \
-            Since this is an experimental feature, be careful when uploading large files.\n\
-            Data streaming essentially downloads and uploads chunks of data, as if the file was downloaded \
-            to disk and then uploaded to MultiUp. However, in this case, the data is not written to disk.");
+            ui.label("Unlocks links using a Debrid service (AllDebrid and Real-Debrid).");
+            
+            // ui.separator();
+            // 
+            // ui.heading("Upload");
+            // ui.label("Uploads content to MultiUp.\n\n\
+            // Remote uploaded with data streaming enabled allows for better support of different sites, including Debrid services. \
+            // Since this is an experimental feature, be careful when uploading large files.\n\
+            // Data streaming essentially downloads and uploads chunks of data, as if the file was downloaded \
+            // to disk and then uploaded to MultiUp. However, in this case, the data is not written to disk.");
         }));
     }
 
@@ -108,6 +101,12 @@ impl HelpUI {
         Window::new("Updates")
             .open(&mut self.show_update)
             .show(ctx, |ui| {
+                if ui.checkbox(&mut self.check_for_update_on_startup, "Check for updates on startup").clicked() {
+                    let mut config = read_config().unwrap_or_default();
+                    config.check_for_updates_on_startup = self.check_for_update_on_startup;
+                    save_config(&config);
+                };
+                
                 ui.horizontal(|ui| {
                     ui.heading({
                         match &self.update_status {

@@ -8,8 +8,10 @@ use crate::modules::ui::upload::upload::UploadUI;
 
 pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
+pub const GITHUB: &str = "https://github.com/Reddiepoint/MultiUp-Direct/";
+
 pub const DOCUMENTATION: &str =
-    "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
+    "https://reddiepoint.github.io/MultiUp-Direct-Documentation/";
 
 /// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
@@ -99,9 +101,10 @@ impl MultiUpDirect {
 
             /*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
                         DebridUI::display_error_log(&mut self.debrid_ui, ctx);
-                        self.help_ui.show_help_window(ctx);
-                        self.help_ui.show_update_window(ctx);
-            */
+
+             */
+            self.help_ui.show_help_window(ctx);
+            self.help_ui.show_update_window(ctx);
         });
     }
 }
