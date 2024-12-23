@@ -69,7 +69,7 @@ impl DebridUI {
             match self.debrid_service {
                 DebridService::AllDebrid => {
                     ui.add(
-                        TextEdit::singleline(&mut self.api_keys.all_debrid)
+                        TextEdit::singleline(&mut self.api_keys.alldebrid)
                             .hint_text("Enter your AllDebrid API key here")
                             .password(true),
                     );
@@ -77,7 +77,7 @@ impl DebridUI {
                 DebridService::RealDebrid => {
                     ui.add(
                         TextEdit::singleline(&mut self.api_keys.real_debrid)
-                            .hint_text("Enter your RealDebrid API key here")
+                            .hint_text("Enter your Real-Debrid API key here")
                             .password(true),
                     );
                 }
@@ -104,9 +104,9 @@ impl DebridUI {
                     },
                 };
                 match self.debrid_service {
-                    DebridService::AllDebrid => match self.api_keys.all_debrid.is_empty() {
-                        true => config.all_debrid_api_key = None,
-                        false => config.all_debrid_api_key = Some(self.api_keys.all_debrid.clone()),
+                    DebridService::AllDebrid => match self.api_keys.alldebrid.is_empty() {
+                        true => config.alldebrid_api_key = None,
+                        false => config.alldebrid_api_key = Some(self.api_keys.alldebrid.clone()),
                     },
                     DebridService::RealDebrid => match self.api_keys.real_debrid.is_empty() {
                         true => config.real_debrid_api_key = None,
@@ -149,7 +149,9 @@ impl DebridUI {
                 });
             });
         }
-        if ui.button("Unlock links").clicked() {}
+        if ui.button("Unlock links").clicked() {
+            self.debrid_service.unlock_links(&self.hosting_links)
+        }
     }
     pub fn display_error_log(&mut self, ctx: &Context) {}
     fn display_debrid_links_area(&mut self, ui: &mut Ui) {

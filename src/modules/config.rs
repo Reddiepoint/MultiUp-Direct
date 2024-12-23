@@ -4,7 +4,7 @@ use std::io::ErrorKind;
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub auto_update: bool,
-    pub all_debrid_api_key: Option<String>,
+    pub alldebrid_api_key: Option<String>,
     pub real_debrid_api_key: Option<String>,
 }
 
@@ -12,7 +12,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             auto_update: false,
-            all_debrid_api_key: None,
+            alldebrid_api_key: None,
             real_debrid_api_key: None,
         }
     }

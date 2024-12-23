@@ -1,4 +1,4 @@
 pub mod alldebrid;
-pub mod realdebrid;
+pub mod real_debrid;
 pub mod services;
 pub mod links;
