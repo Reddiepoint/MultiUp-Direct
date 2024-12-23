@@ -70,12 +70,18 @@ impl ExtractUI {
                         return;
                     }
                 }
-                new_success_toast(
-                    &mut self.toasts,
-                    "Successfully extracted links.",
-                    None,
-                    None,
-                );
+                match self.links_information.is_empty() {
+                    true => {
+                        new_info_toast(&mut self.toasts, "No links extracted.", None, None);
+                        return;
+                    }
+                    false => new_success_toast(
+                        &mut self.toasts,
+                        "Successfully extracted links.",
+                        None,
+                        None,
+                    ),
+                }
             }
         }
     }
@@ -317,12 +323,7 @@ impl ExtractUI {
                 None,
                 None,
             ),
-            ToastType::NoLinks => new_info_toast(
-                &mut self.toasts,
-                "No links found.",
-                None,
-                None,
-            ),
+            ToastType::NoLinks => new_info_toast(&mut self.toasts, "No links found.", None, None),
             ToastType::Nothing => {}
         }
         let mut link_labels = vec![];

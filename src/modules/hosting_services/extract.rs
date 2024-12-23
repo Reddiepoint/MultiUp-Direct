@@ -72,6 +72,9 @@ async fn extract_download_links(
     hosting_service_links: &Vec<HostingServiceLink>,
     recheck_validity: bool,
 ) -> Vec<LinkInformation> {
+    if hosting_service_links.is_empty() {
+        return Vec::new();
+    }
     let browser = new_browser();
     let max_concurrent_tabs = 10;
     let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
