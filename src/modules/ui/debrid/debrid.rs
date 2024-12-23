@@ -70,13 +70,15 @@ impl DebridUI {
                 DebridService::AllDebrid => {
                     ui.add(
                         TextEdit::singleline(&mut self.api_keys.all_debrid)
-                            .hint_text("Enter your AllDebrid API key here"),
+                            .hint_text("Enter your AllDebrid API key here")
+                            .password(true),
                     );
                 }
                 DebridService::RealDebrid => {
                     ui.add(
                         TextEdit::singleline(&mut self.api_keys.real_debrid)
-                            .hint_text("Enter your RealDebrid API key here"),
+                            .hint_text("Enter your RealDebrid API key here")
+                            .password(true),
                     );
                 }
             }
