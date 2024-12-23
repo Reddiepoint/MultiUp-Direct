@@ -62,10 +62,10 @@ impl RealDebridDownloadLink {
         let query = "https://api.real-debrid.com/rest/1.0/unrestrict/link";
         let mut params = HashMap::new();
         params.insert("link", self.link.as_str());
-        // params.insert("remote", match use_remote_traffic {
-        //     true => "1",
-        //     false => "0",
-        // });
+        params.insert("remote", match use_remote_traffic {
+            true => "1",
+            false => "0",
+        });
         match client.post(query)
             .header("Authorization", format!("Bearer {}", self.api_key.clone()))
             .form(&params)
@@ -91,7 +91,7 @@ impl RealDebridResponse {
         match &self.error {
             Some(error) => {
                 let error = match error.as_str() {
-                    "hoster_not_free" => DebridError::HostNotSupported,
+                    "hoster_not_free" | "hoster_unsupported" => DebridError::HostNotSupported,
                     _ => DebridError::Unknown(self.error_details.clone().unwrap_or_default())
                 };
                 DebridServiceLink::new(String::new(), Err(error), original_link)
