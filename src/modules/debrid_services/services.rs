@@ -64,7 +64,8 @@ impl Default for DebridAPIKeys {
         };
         if let Some(key) = config.alldebrid_api_key {
             debrid_api_keys.alldebrid = key;
-        } else if let Some(key) = config.real_debrid_api_key {
+        }
+        if let Some(key) = config.real_debrid_api_key {
             debrid_api_keys.real_debrid = key;
         }
         debrid_api_keys
