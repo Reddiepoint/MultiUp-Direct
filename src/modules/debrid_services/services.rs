@@ -1,6 +1,6 @@
 use crate::modules::config;
-use crate::modules::debrid_services::alldebrid;
 use crate::modules::debrid_services::links::{recognise_links, DebridServiceLink};
+use crate::modules::debrid_services::{alldebrid, real_debrid};
 use crossbeam_channel::Sender;
 
 #[derive(PartialEq)]
@@ -10,13 +10,20 @@ pub enum DebridService {
 }
 
 impl DebridService {
-    pub fn unlock_links(&self, links: &str, link_sender: Sender<Vec<DebridServiceLink>>) {
+    pub fn unlock_links(
+        &self,
+        links: &str,
+        use_remote_traffic: bool,
+        link_sender: Sender<Vec<DebridServiceLink>>,
+    ) {
         let links = recognise_links(links);
         match self {
             DebridService::AllDebrid(api_key) => {
                 alldebrid::unlock_links(links, api_key.clone(), link_sender)
             }
-            DebridService::RealDebrid(api_key) => {}
+            DebridService::RealDebrid(api_key) => {
+                real_debrid::unlock_links(links, api_key.clone(), use_remote_traffic, link_sender)
+            }
         }
     }
 }
@@ -33,6 +40,7 @@ impl Default for DebridService {
         }
     }
 }
+
 impl DebridService {
     pub fn supports_remote_traffic(&self) -> bool {
         match self {

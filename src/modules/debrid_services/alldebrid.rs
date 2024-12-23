@@ -30,16 +30,8 @@ pub fn unlock_links(
                             }
                             DebridError::Unknown(error) => {
                                 eprintln!("Unknown Error: {}", error);
-                            }
-                            DebridError::HostNotSupported => {
-                                eprintln!("Host not supported");
-                            }
-                            DebridError::HostDown => {
-                                eprintln!("Host down")
                             },
-                            DebridError::LinkDown => {
-                                eprintln!("Link down")
-                            }
+                            _ => eprintln!("Some other error"),
                         }
                     }
                     result
@@ -83,7 +75,7 @@ impl AllDebridDownloadLink {
 
         match client.get(query).send().await {
             Ok(response) => match response.json::<AllDebridResponse>().await {
-                Ok(response) => Ok(response.new_debrid_service_link(Some(self.link.clone()))),
+                Ok(response) => Ok(response.new_debrid_service_link(self.link.clone())),
                 Err(error) => Err(DebridError::Unknown(error.to_string())),
             },
             Err(error) => Err(DebridError::ReqwestError(error.to_string())),
@@ -98,17 +90,18 @@ pub struct AllDebridResponse {
 }
 
 impl AllDebridResponse {
-    fn new_debrid_service_link(&self, original_link: Option<String>) -> DebridServiceLink {
+    fn new_debrid_service_link(&self, original_link: String) -> DebridServiceLink {
         match &self.data {
             None => {
                 if let Some(error) = &self.error {
                     let error = match error.code.as_str() {
+                        "AUTH_BAD_APIKEY" => DebridError::BadAPIKey,
                         "LINK_DOWN" => DebridError::LinkDown,
                         "LINK_HOST_UNAVAILABLE" => DebridError::HostDown,
                         "LINK_HOST_NOT_SUPPORTED" => DebridError::HostNotSupported,
                         _ => DebridError::Unknown(error.code.clone()),
                     };
-                    DebridServiceLink::new(String::new(), Err(error), original_link.unwrap_or_default())
+                    DebridServiceLink::new(String::new(), Err(error), original_link)
                 } else {
                     panic!("Missing link")
                 }
@@ -119,7 +112,7 @@ impl AllDebridResponse {
                     "success" => Ok(()),
                     _ => Err(DebridError::Unknown(self.status.clone())),
                 },
-                original_link.unwrap_or_default()
+                original_link
             ),
         }
     }

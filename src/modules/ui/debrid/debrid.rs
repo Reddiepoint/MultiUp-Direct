@@ -187,7 +187,7 @@ impl DebridUI {
                 let (links_sender, links_receiver) = crossbeam_channel::unbounded();
                 self.links_receiver = Some(links_receiver);
                 self.debrid_service
-                    .unlock_links(&self.hosting_links, links_sender)
+                    .unlock_links(&self.hosting_links, self.use_remote_traffic, links_sender);
             }
 
             if self.unlocking {

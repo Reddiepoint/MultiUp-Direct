@@ -1,5 +1,6 @@
-use std::fmt::Display;
 use regex::Regex;
+use std::fmt::Display;
+use crossbeam_channel::Sender;
 
 pub struct DebridServiceLink {
     pub link: String,
@@ -9,12 +10,17 @@ pub struct DebridServiceLink {
 
 impl DebridServiceLink {
     pub fn new(link: String, status: Result<(), DebridError>, original_link: String) -> Self {
-        DebridServiceLink { link, status, original_link }
+        DebridServiceLink {
+            link,
+            status,
+            original_link,
+        }
     }
 }
 
 #[derive(Clone)]
 pub enum DebridError {
+    BadAPIKey,
     ReqwestError(String),
     HostNotSupported,
     HostDown,
@@ -25,18 +31,13 @@ pub enum DebridError {
 impl DebridError {
     pub fn get_error_message(&self) -> String {
         match self {
+            DebridError::BadAPIKey => {"Bad API key".to_string()}
             DebridError::ReqwestError(error) => {
                 format!("Reqwest error: {}", error)
             }
-            DebridError::HostNotSupported => {
-                "Host not supported".to_string()
-            }
-            DebridError::HostDown => {
-                "Host down or under maintenance".to_string()
-            }
-            DebridError::LinkDown => {
-                "Link offline".to_string()
-            }
+            DebridError::HostNotSupported => "Host not supported".to_string(),
+            DebridError::HostDown => "Host down or under maintenance".to_string(),
+            DebridError::LinkDown => "Link offline".to_string(),
             DebridError::Unknown(error) => {
                 format!("Unknown error: {}", error)
             }
@@ -49,9 +50,9 @@ pub fn recognise_links(raw_links: &str) -> Vec<String> {
     let mut detected_links = Vec::new();
     for (link, [domain, slug]) in generic_link_regex
         .captures_iter(raw_links)
-        .map(|c| c.extract()) {
+        .map(|c| c.extract())
+    {
         detected_links.push(link.to_owned());
     }
     detected_links
 }
-
