@@ -40,7 +40,7 @@ pub fn unlock_links(
                             debrid_links.push(link);
                         }
                     }
-                    Err(error) => println!("Error: {}", error),
+                    Err(error) => eprintln!("Error: {}", error),
                 }
             }
 

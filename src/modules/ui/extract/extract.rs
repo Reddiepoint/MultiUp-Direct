@@ -49,17 +49,6 @@ impl ExtractUI {
             if let Ok(links_information) = links_receiver.try_recv() {
                 self.extracting = false;
                 self.links_information = links_information;
-                for link in &self.links_information {
-                    println!("{}", link.filename);
-                    println!(
-                        "{}",
-                        link.direct_links
-                            .iter()
-                            .map(|link| link.link.clone())
-                            .collect::<Vec<String>>()
-                            .join("\n")
-                    );
-                }
 
                 self.filter_menu
                     .update_from_link_information(&self.links_information);
@@ -256,7 +245,6 @@ impl ExtractUI {
                     .duration_since(UNIX_EPOCH)
                     .expect("Time went backwards")
                     .as_secs();
-                println!("{:?}", time_stamp);
                 let text_file_name = format!("extracted_links_{}.txt", time_stamp);
                 if links_text.is_empty() {
                     toast_type = ToastType::NoLinks;
@@ -287,7 +275,6 @@ impl ExtractUI {
                     .duration_since(UNIX_EPOCH)
                     .expect("Time went backwards")
                     .as_secs();
-                println!("{:?}", time_stamp);
                 let text_file_name = format!("extracted_links_{}.txt", time_stamp);
                 save_to_file(&text_file_name, &links_text);
                 toast_type = ToastType::SaveSelectedAsTXT(text_file_name);

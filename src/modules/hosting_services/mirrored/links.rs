@@ -160,7 +160,6 @@ impl MirroredLink {
             .map(|element| element.attr("href").unwrap())
             .map(Self::get_getlink_link)
             .collect();
-        println!("{:?}", host_links);
         let selector =
             Selector::parse("td[data-label='Link Status'] > span > div > div").unwrap();
         let validities: Vec<LinkValidity> = html

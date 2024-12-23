@@ -203,6 +203,7 @@ impl DebridUI {
     pub fn display_error_log(&mut self, ctx: &Context) {
         Window::new("Debrid Error Log")
             .open(&mut self.error_log_open)
+            .default_width(200.0)
             .show(ctx, |ui| {
                 let error_log: Vec<(String, DebridError)> = self
                     .debrid_links

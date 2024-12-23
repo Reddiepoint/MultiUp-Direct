@@ -52,7 +52,6 @@ pub fn wait_for_element<'a>(
     let timeout = Duration::from_secs(duration.unwrap_or(10) as u64);
     let mut error_message = None;
     while total_retries <= retries.unwrap_or(0) {
-        println!("Waiting");
         match tab.wait_for_element_with_custom_timeout(selector, timeout) {
             Ok(element) => {
                 return Ok(element);

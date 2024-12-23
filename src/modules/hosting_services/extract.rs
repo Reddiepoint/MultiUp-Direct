@@ -34,8 +34,6 @@ pub fn extract_raw_links(
                     final_download_links.push(download_link);
                 }
             }
-            println!("{}", final_download_links.len());
-            println!("{:?}", final_download_links);
             let _ = link_information_sender.send(final_download_links);
         });
     });
@@ -131,7 +129,6 @@ async fn extract_download_links(
         }
     }
     
-    println!("{:?}", link_informations);
     let mut final_link_informations = BTreeMap::new();
     for link_information in link_informations {
         final_link_informations.insert(link_information.id.clone(), link_information);
