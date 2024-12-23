@@ -109,6 +109,7 @@ impl ExtractUI {
                 .add_enabled(!self.extracting, egui::Button::new("Extract"))
                 .clicked()
             {
+                self.extracting = true;
                 let (links_sender, links_receiver) = crossbeam_channel::unbounded();
                 self.links_receiver = Some(links_receiver);
                 // self.extracting = true;
