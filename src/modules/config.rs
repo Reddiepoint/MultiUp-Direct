@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 
 #[derive(Deserialize, Serialize)]
 pub struct Config {
-    pub auto_update: bool,
+    pub check_for_updates_on_startup: bool,
     pub alldebrid_api_key: Option<String>,
     pub real_debrid_api_key: Option<String>,
 }
@@ -11,7 +11,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            auto_update: false,
+            check_for_updates_on_startup: true,
             alldebrid_api_key: None,
             real_debrid_api_key: None,
         }
