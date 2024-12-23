@@ -250,8 +250,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_click_check_link_status() {
+        // Note: Hash changes over time
         let url =
-            "https://www.mirrored.to/files/0KGTBMFK/?hash=c90ecbc39202a5057406628097f00c53&dl=0";
+            "https://www.mirrored.to/files/0KGTBMFK/?hash=b8ccdcb3cad258b2bb8dc7dc80a29477&dl=0";
         for i in 0..1 {
             println!("Iteration {}", i);
             let browser = new_browser();
