@@ -1,12 +1,13 @@
+use crate::modules::debrid_services::links::DebridError;
 use crate::modules::general::{copy_to_clipboard, save_to_file};
 use crate::modules::hosting_services::extract::extract_raw_links;
-use crate::modules::hosting_services::links::LinkInformation;
+use crate::modules::hosting_services::links::{LinkError, LinkInformation};
 use crate::modules::ui::extract::filter::FilterMenu;
 use crate::modules::ui::toasts::{new_error_toast, new_info_toast, new_success_toast, new_toasts};
 use crossbeam_channel::Receiver;
 use eframe::egui;
 use eframe::egui::{
-    CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui,
+    CollapsingHeader, Context, Label, ScrollArea, Sense, TextEdit, TopBottomPanel, Ui, Window,
 };
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
@@ -31,6 +32,8 @@ pub struct ExtractUI {
     direct_links: Vec<(String, BTreeSet<String>)>,
     selected_links: HashMap<String, BTreeSet<String>>,
     // Footer
+    // Error log
+    error_log_open: bool,
 }
 
 impl ExtractUI {
@@ -41,6 +44,7 @@ impl ExtractUI {
         ui.separator();
         extract_ui.display_footer(ctx);
         extract_ui.display_output_area(ui);
+        extract_ui.display_error_log(ctx);
         extract_ui.toasts.show(ctx);
     }
 
@@ -114,6 +118,10 @@ impl ExtractUI {
             if self.extracting {
                 ui.spinner();
                 ui.label("Extracting links...");
+            }
+            
+            if ui.button("See errors").clicked() {
+                self.error_log_open = true;
             }
         });
     }
@@ -491,7 +499,47 @@ impl ExtractUI {
         });
     }
 
-    pub fn display_error_log(&mut self, ctx: &Context) {}
+    pub fn display_error_log(&mut self, ctx: &Context) {
+        Window::new("Extract Error Log")
+            .open(&mut self.error_log_open)
+            .default_width(1000.0)
+            .show(ctx, |ui| {
+                let error_log: Vec<(String, String)> = self
+                    .links_information
+                    .iter()
+                    .filter(|link| link.status.is_err())
+                    .map(|link| (link.original_link.clone(), link.status.clone().unwrap_err().get_error_message()))
+                    .collect();
+                ScrollArea::vertical()
+                    .id_salt("Debrid Error Log Box")
+                    .max_width(ui.available_width() * 0.8)
+                    .show(ui, |ui| {
+                        let heights = error_log
+                            .iter()
+                            .map(|(_link, _error)| 20.0 + 18.0)
+                            .collect::<Vec<f32>>();
+                        ui.push_id("Debrid Error Log Table", |ui| {
+                            let width = ui.available_width() / 2.0;
+                            TableBuilder::new(ui)
+                                .column(Column::exact(width))
+                                .column(Column::exact(width))
+                                .body(|body| {
+                                    body.heterogeneous_rows(heights.into_iter(), |mut row| {
+                                        let row_index = row.index();
+                                        row.col(|ui| {
+                                            ui.label(&error_log[row_index].0);
+                                        });
+                                        row.col(|ui| {
+                                            ui.label(
+                                                &error_log[row_index].1,
+                                            );
+                                        });
+                                    })
+                                });
+                        });
+                    });
+            });
+    }
 
     fn copy_selected_links(&self, ui: &Ui) {
         let links: Vec<String> = self

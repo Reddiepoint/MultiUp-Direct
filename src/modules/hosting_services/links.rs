@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-
+use eframe::egui::Link;
 use headless_chrome::Browser;
 
 use crate::modules::hosting_services::mirrored::links::MirroredLink;
@@ -115,7 +115,7 @@ pub trait HostingService {
     fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum LinkError {
     TimedOut(String, u64),
     InvalidLink(String),
@@ -138,4 +138,18 @@ impl Display for LinkError {
     }
 }
 
-impl Error for LinkError {}
+impl LinkError {
+    pub fn get_error_message(&self) -> String {
+        match self {
+            LinkError::TimedOut(link, timeout) => {
+                format!("{} timed out after {} seconds", link, timeout)
+            }
+            LinkError::InvalidLink(link) => {
+                format!("Invalid link: {}", link)
+            }
+            LinkError::Unknown => {
+                "Unknown error".to_string()
+            }
+        }
+    }
+}

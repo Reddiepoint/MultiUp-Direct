@@ -1,6 +1,6 @@
 use crate::modules::config;
 use crate::modules::config::{Config, ConfigError};
-use crate::modules::debrid_services::links::{DebridError, DebridServiceLink};
+use crate::modules::debrid_services::links::DebridServiceLink;
 use crate::modules::debrid_services::services::{DebridAPIKeys, DebridService};
 use crate::modules::ui::toasts::{new_error_toast, new_info_toast, new_success_toast, new_toasts};
 use crossbeam_channel::Receiver;
@@ -186,8 +186,11 @@ impl DebridUI {
                 self.unlocking = true;
                 let (links_sender, links_receiver) = crossbeam_channel::unbounded();
                 self.links_receiver = Some(links_receiver);
-                self.debrid_service
-                    .unlock_links(&self.hosting_links, self.use_remote_traffic, links_sender);
+                self.debrid_service.unlock_links(
+                    &self.hosting_links,
+                    self.use_remote_traffic,
+                    links_sender,
+                );
             }
 
             if self.unlocking {
@@ -205,11 +208,16 @@ impl DebridUI {
             .open(&mut self.error_log_open)
             .default_width(1000.0)
             .show(ctx, |ui| {
-                let error_log: Vec<(String, DebridError)> = self
+                let error_log: Vec<(String, String)> = self
                     .debrid_links
                     .iter()
                     .filter(|link| link.status.is_err())
-                    .map(|link| (link.original_link.clone(), link.status.clone().unwrap_err()))
+                    .map(|link| {
+                        (
+                            link.original_link.clone(),
+                            link.status.clone().unwrap_err().get_error_message(),
+                        )
+                    })
                     .collect();
                 ScrollArea::vertical()
                     .id_salt("Debrid Error Log Box")
@@ -228,12 +236,10 @@ impl DebridUI {
                                     body.heterogeneous_rows(heights.into_iter(), |mut row| {
                                         let row_index = row.index();
                                         row.col(|ui| {
-                                            ui.label(error_log[row_index].0.as_str());
+                                            ui.label(&error_log[row_index].0);
                                         });
                                         row.col(|ui| {
-                                            ui.label(
-                                                error_log[row_index].1.get_error_message().as_str(),
-                                            );
+                                            ui.label(&error_log[row_index].1);
                                         });
                                     })
                                 });
