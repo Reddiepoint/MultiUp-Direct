@@ -51,7 +51,7 @@ impl HostingService for MirroredLink {
             }
         };
 
-        if let Ok(_warning) = tab.find_element(".error") {
+        if let Ok(_warning) = tab.find_element(".error.bordered.padded.centered") {
             link_information.status = Err(LinkError::InvalidLink("File not found".to_string()));
             if let Err(error) = tab.close(true) {
                 link_information.status = Err(LinkError::BrowserError(format!(

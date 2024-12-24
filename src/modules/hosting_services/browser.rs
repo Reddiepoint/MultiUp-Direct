@@ -11,6 +11,7 @@ pub fn new_browser() -> Browser {
         .headless(false)
         .sandbox(true)
         .devtools(false)
+        .idle_browser_timeout(Duration::from_secs(1000))
         .ignore_default_args({
             let args = vec!["--enable-automation"];
             args.into_iter().map(OsStr::new).collect()
@@ -31,15 +32,15 @@ pub fn navigate_to_new_tab(browser: &Browser, url: &str) -> Result<Arc<Tab>, (Op
             return Err((None, LinkError::BrowserError(format!("Failed to create new tab: {}", error))));
         }
     };
-    
+
     if let Err(error) = tab.navigate_to(url) {
         return Err((Some(tab), LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error))));
     }
-    
+
     if let Err(error) = tab.wait_until_navigated() {
         return Err((Some(tab), LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error))));
     };
-    
+
     Ok(tab)
 }
 
