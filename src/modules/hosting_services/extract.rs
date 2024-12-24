@@ -1,16 +1,14 @@
 use crate::modules::hosting_services::browser::new_browser;
 use crate::modules::hosting_services::links::{
-    DirectLink, HostingService, HostingServiceLink, LinkInformation,
+    HostingService, HostingServiceLink, LinkInformation,
 };
 use crate::modules::hosting_services::mirrored::links::new_mirrored_link;
-use crate::modules::hosting_services::multiup::links::{new_multiup_link, MultiUpMirrorLink};
+use crate::modules::hosting_services::multiup::links::new_multiup_link;
 use crossbeam_channel::Sender;
-use headless_chrome::Browser;
 use regex::Regex;
-use reqwest::Client;
-use std::sync::Arc;
-use std::{mem, thread};
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::thread;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
@@ -82,7 +80,27 @@ async fn extract_download_links(
     for link in hosting_service_links {
         match link {
             HostingServiceLink::MultiUpProject(project) => {
-                let mirror_links = project.get_mirror_links(&browser);
+                let mirror_links = match project.get_mirror_links(&browser) {
+                    Ok(mirror_links) => mirror_links,
+                    Err(error) => {
+                        let original_link = project.original_link.clone();
+                        let task = tokio::spawn(async move {
+                            let link_information = LinkInformation::new(
+                                original_link,
+                                String::new(),
+                                String::new(),
+                                String::new(),
+                                0.0,
+                                String::new(),
+                                Vec::new(),
+                                Err(error),
+                            );
+                            link_information
+                        });
+                        tasks.push(task);
+                        continue;
+                    }
+                };
                 for mirror_link in mirror_links {
                     let browser = browser.clone();
                     let semaphore = Arc::clone(&semaphore);
@@ -128,12 +146,12 @@ async fn extract_download_links(
             }
         }
     }
-    
+
     let mut final_link_informations = BTreeMap::new();
     for link_information in link_informations {
         final_link_informations.insert(link_information.id.clone(), link_information);
     }
-    
+
     let link_informations = final_link_informations.into_values().collect();
     link_informations
 }

@@ -23,17 +23,6 @@ pub fn unlock_links(
                 let client = client.clone();
                 let task = tokio::spawn(async move {
                     let result = link.unlock(&client).await;
-                    if let Err(error) = &result {
-                        match error {
-                            DebridError::ReqwestError(error) => {
-                                eprintln!("Reqwest Error: {}", error);
-                            }
-                            DebridError::Unknown(error) => {
-                                eprintln!("Unknown Error: {}", error);
-                            },
-                            _ => eprintln!("Some other error"),
-                        }
-                    }
                     result
                 });
                 tasks.push(task);

@@ -1,5 +1,5 @@
 use crate::modules::hosting_services::filter::{count_hosts, get_info};
-use crate::modules::hosting_services::links::{DirectLink, LinkInformation, LinkValidity};
+use crate::modules::hosting_services::links::{DirectLink, LinkInformation, DirectLinkValidity};
 use eframe::egui::{ScrollArea, Ui};
 use std::collections::HashMap;
 
@@ -147,9 +147,9 @@ impl FilterMenu {
 
             if filter_validity {
                 return match link.validity {
-                    LinkValidity::Valid => self.valid_chosen,
-                    LinkValidity::Invalid => self.invalid_chosen,
-                    LinkValidity::Unknown => self.unknown_chosen,
+                    DirectLinkValidity::Valid => self.valid_chosen,
+                    DirectLinkValidity::Invalid => self.invalid_chosen,
+                    DirectLinkValidity::Unknown => self.unknown_chosen,
                 };
             }
         }

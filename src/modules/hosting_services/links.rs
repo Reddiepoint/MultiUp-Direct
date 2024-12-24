@@ -1,7 +1,5 @@
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use eframe::egui::Link;
 use headless_chrome::Browser;
+use std::fmt::{Debug, Display, Formatter};
 
 use crate::modules::hosting_services::mirrored::links::MirroredLink;
 use crate::modules::hosting_services::multiup::links::{MultiUpMirrorLink, MultiUpProjectLink};
@@ -89,11 +87,11 @@ impl LinkInformation {
 pub struct DirectLink {
     pub host: String,
     pub link: String,
-    pub validity: LinkValidity,
+    pub validity: DirectLinkValidity,
 }
 
 impl DirectLink {
-    pub fn new(host: String, link: String, validity: LinkValidity) -> Self {
+    pub fn new(host: String, link: String, validity: DirectLinkValidity) -> Self {
         Self {
             host,
             link,
@@ -103,7 +101,7 @@ impl DirectLink {
 }
 
 #[derive(Debug)]
-pub enum LinkValidity {
+pub enum DirectLinkValidity {
     Valid,
     Invalid,
     Unknown,
@@ -117,22 +115,26 @@ pub trait HostingService {
 
 #[derive(Clone, Debug)]
 pub enum LinkError {
+    BrowserError(String),
     TimedOut(String, u64),
     InvalidLink(String),
-    Unknown,
+    Unknown(String),
 }
 
 impl Display for LinkError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LinkError::TimedOut(link, timeout) => {
-                write!(f, "{} timed out after {} seconds", link, timeout)
+            LinkError::TimedOut(error, timeout) => {
+                write!(f, "Timed out after {} seconds: {}", timeout, error)
             }
-            LinkError::InvalidLink(link) => {
-                write!(f, "Invalid link: {}", link)
+            LinkError::InvalidLink(error) => {
+                write!(f, "Invalid link: {}", error)
             }
-            LinkError::Unknown => {
-                write!(f, "Unknown error")
+            LinkError::Unknown(error) => {
+                write!(f, "Unknown error: {}", error)
+            }
+            LinkError::BrowserError(error) => {
+                write!(f, "Browser error: {}", error)
             }
         }
     }
@@ -141,14 +143,17 @@ impl Display for LinkError {
 impl LinkError {
     pub fn get_error_message(&self) -> String {
         match self {
-            LinkError::TimedOut(link, timeout) => {
-                format!("{} timed out after {} seconds", link, timeout)
+            LinkError::TimedOut(error, timeout) => {
+                format!("Timed out after {} seconds: {}", timeout, error)
             }
-            LinkError::InvalidLink(link) => {
-                format!("Invalid link: {}", link)
+            LinkError::InvalidLink(error) => {
+                format!("Invalid link: {}", error)
             }
-            LinkError::Unknown => {
-                "Unknown error".to_string()
+            LinkError::Unknown(error) => {
+                format!("Unknown error: {}", error)
+            }
+            LinkError::BrowserError(error) => {
+                format!("Browser error: {}", error)
             }
         }
     }

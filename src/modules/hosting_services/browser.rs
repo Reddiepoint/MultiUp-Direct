@@ -1,5 +1,4 @@
 use std::ffi::OsStr;
-use std::process::abort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -57,15 +56,21 @@ pub fn wait_for_element<'a>(
                 return Ok(element);
             }
             Err(error) => {
-                total_retries += 1;
                 let _ = tab.reload(false, None);
-                error_message = Some(error)
+                error_message = Some(error.to_string());
+                total_retries += 1;
             }
         }
     }
-    eprintln!("Error waiting for element: {}", error_message.unwrap());
-    Err(LinkError::TimedOut(selector.to_string(), duration.unwrap_or(10) as u64))
-    // panic!(); // TODO: Return error
+
+    Err(LinkError::TimedOut(
+        format!(
+            "Error waiting for element `{}`: {}",
+            selector,
+            error_message.unwrap_or("Unknown error".to_string())
+        ),
+        duration.unwrap_or(10) as u64,
+    ))
 }
 
 #[cfg(test)]

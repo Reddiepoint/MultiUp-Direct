@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::links::{
-    DirectLink, HostingService, HostingServiceLink, LinkInformation, LinkValidity,
+    DirectLink, HostingService, HostingServiceLink, LinkInformation, DirectLinkValidity,
 };
 
 #[derive(Clone)]
@@ -162,18 +162,18 @@ impl MirroredLink {
             .collect();
         let selector =
             Selector::parse("td[data-label='Link Status'] > span > div > div").unwrap();
-        let validities: Vec<LinkValidity> = html
+        let validities: Vec<DirectLinkValidity> = html
             .select(&selector)
             .map(|element| element.text().next().unwrap())
             .map(|validity| match validity {
-                "Online!" => LinkValidity::Valid,
-                "Offline!" => LinkValidity::Invalid,
-                _ => LinkValidity::Unknown,
+                "Online!" => DirectLinkValidity::Valid,
+                "Offline!" => DirectLinkValidity::Invalid,
+                _ => DirectLinkValidity::Unknown,
             })
             .collect();
         assert_eq!(validities.len(), host_links.len());
         let hosts = host_links.iter().zip(validities);
-        let hosts: Vec<(String, LinkValidity)> = hosts
+        let hosts: Vec<(String, DirectLinkValidity)> = hosts
             .map(|(link, validity)| (link.to_owned(), validity))
             .collect();
         let direct_links = hosts.into_par_iter()

@@ -6,6 +6,7 @@ pub struct Config {
     pub check_for_updates_on_startup: bool,
     pub alldebrid_api_key: Option<String>,
     pub real_debrid_api_key: Option<String>,
+    pub hosting_passwords: Vec<String>
 }
 
 impl Default for Config {
@@ -14,6 +15,7 @@ impl Default for Config {
             check_for_updates_on_startup: true,
             alldebrid_api_key: None,
             real_debrid_api_key: None,
+            hosting_passwords: Vec::new(),
         }
     }
 }

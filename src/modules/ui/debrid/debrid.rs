@@ -231,7 +231,7 @@ impl DebridUI {
                             let width = ui.available_width() / 2.0;
                             TableBuilder::new(ui)
                                 .column(Column::exact(width))
-                                .column(Column::exact(width))
+                                .column(Column::remainder())
                                 .body(|body| {
                                     body.heterogeneous_rows(heights.into_iter(), |mut row| {
                                         let row_index = row.index();

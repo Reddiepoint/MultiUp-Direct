@@ -1,10 +1,7 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::extract::recognise_links;
 use crate::modules::hosting_services::links::{
-    DirectLink, HostingService, HostingServiceLink, LinkInformation, LinkValidity,
+    DirectLink, DirectLinkValidity, HostingService, HostingServiceLink, LinkError, LinkInformation,
 };
 use headless_chrome::Browser;
 use scraper::node::Element;
@@ -12,7 +9,7 @@ use scraper::selectable::Selectable;
 use scraper::{Html, Selector};
 
 pub struct MultiUpProjectLink {
-    original_link: String,
+    pub original_link: String,
     id: String,
 }
 
@@ -39,9 +36,39 @@ impl MultiUpProjectLink {
         format!("https://multiup.io/en/project/{}", self.id)
     }
 
-    pub fn get_mirror_links(&self, browser: &Browser) -> Vec<MultiUpMirrorLink> {
+    pub fn get_mirror_links(&self, browser: &Browser) -> Result<Vec<MultiUpMirrorLink>, LinkError> {
         let tab = navigate_to_new_tab(browser, &self.return_project_link());
-        let _ = wait_for_element(&tab, "#textarea-links-long", None, None);
+
+        // wait_for_element(
+        //     &tab,
+        //     "h2",
+        //     Some(20),
+        //     Some(5),
+        // )?;
+
+        if let Ok(warning) = tab.find_element(".alert.alert-danger > strong") {
+            let error = match warning.get_inner_text() {
+                Ok(text) => match text.as_str() {
+                    "The requested file could not be found" => {
+                        Err(LinkError::InvalidLink("Project not found".to_string()))
+                    }
+                    _ => Err(LinkError::InvalidLink(text)),
+                },
+                Err(_error) => Err(LinkError::InvalidLink(
+                    "Error getting warning text".to_string(),
+                )),
+            };
+
+            if let Err(error) = tab.close(true) {
+                return Err(LinkError::BrowserError(format!(
+                    "Failed to close tab: {}",
+                    error
+                )));
+            };
+            return error;
+        };
+
+        wait_for_element(&tab, "#textarea-links-long", None, None)?;
         // match tab.wait_for_element("#textarea-links-long")
         // {
         //     Ok(_) => {}
@@ -50,35 +77,49 @@ impl MultiUpProjectLink {
         //         panic!()
         //     }
         // };
+
         let page_html = match tab.get_content() {
             Ok(html) => html,
             Err(error) => {
                 eprintln!("Error getting content: {}", error);
-                panic!(); // TODO: Return error
+                return Err(LinkError::BrowserError("Failed to get HTML".to_string()));
             }
         };
 
-        tab.close(true).unwrap();
+        if let Err(error) = tab.close(true) {
+            return Err(LinkError::BrowserError(format!(
+                "Failed to close tab: {}",
+                error
+            )));
+        };
 
         let document = Html::parse_document(&page_html);
         let selector = Selector::parse("#textarea-links-long").unwrap();
-        let mirror_links = document
-            .select(&selector)
-            .next()
-            .unwrap()
-            .text()
-            .next()
-            .unwrap();
 
+        let mirror_links = match document.select(&selector).next() {
+            Some(element) => match element.text().next() {
+                Some(text) => text,
+                None => {
+                    return Err(LinkError::BrowserError(
+                        "Failed to get links from project".to_string(),
+                    ));
+                }
+            },
+            None => {
+                return Err(LinkError::BrowserError(
+                    "Failed to get links from project".to_string(),
+                ));
+            }
+        };
         let links = recognise_links(mirror_links);
 
-        links
+        Ok(links
             .into_iter()
             .map(|link| match link {
                 HostingServiceLink::MultiUpMirror(link) => link,
                 _ => unreachable!(),
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -108,13 +149,34 @@ impl HostingService for MultiUpMirrorLink {
             Vec::new(),
             Ok(()),
         );
+
         let tab = navigate_to_new_tab(browser, &self.return_mirror_link());
-        let _ = wait_for_element(
-            &tab,
-            "body > section > div > section > header > h2",
-            Some(20),
-            Some(5),
-        );
+        if let Err(error) = wait_for_element(&tab, "h2", Some(20), Some(5)) {
+            link_information.status = Err(error);
+            return link_information;
+        };
+
+        if let Ok(warning) = tab.find_element(".alert.alert-danger > strong") {
+            let error = match warning.get_inner_text() {
+                Ok(text) => match text.as_str() {
+                    "The requested file could not be found" => {
+                        Err(LinkError::InvalidLink("File not found".to_string()))
+                    }
+                    _ => Err(LinkError::InvalidLink(text)),
+                },
+                Err(_error) => Err(LinkError::InvalidLink(
+                    "Error getting warning text".to_string(),
+                )),
+            };
+            link_information.status = error;
+            if let Err(error) = tab.close(true) {
+                link_information.status = Err(LinkError::BrowserError(format!(
+                    "Failed to close tab: {}",
+                    error
+                )));
+            }
+            return link_information;
+        };
         // if let Err(error) = tab.wait_for_element_with_custom_timeout(
         //     "body > section > div > section > header > h2",
         //     Duration::from_secs(10),
@@ -133,28 +195,62 @@ impl HostingService for MultiUpMirrorLink {
             Ok(html) => html,
             Err(error) => {
                 eprintln!("Error getting content: {}", error);
-                panic!();
+                link_information.status =
+                    Err(LinkError::BrowserError("Failed to get HTML".to_string()));
+                return link_information;
             }
         };
 
-        let _ = tab.close(true).unwrap();
+        if let Err(error) = tab.close(true) {
+            link_information.status = Err(LinkError::BrowserError(format!(
+                "Failed to close tab: {}",
+                error
+            )));
+            return link_information;
+        };
 
         let document = Html::parse_document(&page_html);
-        let selector = Selector::parse("body > section > div > section > header > h2").unwrap();
-        let heading = document
-            .select(&selector)
-            .next()
-            .unwrap()
-            .text()
-            .next()
-            .unwrap();
+        let selector = match Selector::parse("h2") {
+            Ok(selector) => selector,
+            Err(error) => {
+                link_information.status = Err(LinkError::BrowserError(format!(
+                    "Failed to parse selector `h2`: {}",
+                    error
+                )));
+                return link_information;
+            }
+        };
+
+        let heading = match document.select(&selector).next() {
+            Some(element) => match element.text().next() {
+                Some(text) => text,
+                None => {
+                    link_information.status = Err(LinkError::BrowserError(
+                        "Failed to get heading text".to_string(),
+                    ));
+                    return link_information;
+                }
+            },
+            None => {
+                link_information.status =
+                    Err(LinkError::BrowserError("Failed to get heading".to_string()));
+                return link_information;
+            }
+        };
+
         let (filename, size, size_unit) = Self::parse_heading(heading);
-        let direct_links = Self::grab_direct_links(&document);
+        let direct_links = match Self::grab_direct_links(&document) {
+            Ok(links) => links,
+            Err(error) => {
+                link_information.status = Err(error);
+                return link_information;
+            }
+        };
         link_information.filename = filename;
         link_information.size = size;
         link_information.size_unit = size_unit;
         link_information.direct_links = direct_links;
-        return link_information;
+        link_information
     }
 }
 
@@ -170,15 +266,20 @@ impl MultiUpMirrorLink {
     fn parse_heading(heading: &str) -> (String, f32, String) {
         let parts: Vec<&str> = heading.split_whitespace().collect();
         let title = parts[3..parts.len() - 4].join(" ");
-        let size = parts[parts.len() - 3].parse::<f32>().unwrap();
+        let size = parts[parts.len() - 3].parse::<f32>().unwrap_or_default();
         let unit = parts[parts.len() - 2].to_uppercase();
 
         return (title, size, unit);
     }
 
-    fn grab_direct_links(html: &Html) -> Vec<DirectLink> {
+    fn grab_direct_links(html: &Html) -> Result<Vec<DirectLink>, LinkError> {
         let mut direct_links = Vec::new();
-        let selector = Selector::parse("button[type='submit'], a.host").unwrap();
+        let selector = Selector::parse("button[type='submit'], a.host").map_err(|error| {
+            LinkError::BrowserError(format!(
+                "Failed to parse selector `button[type='submit'], a.host`: {}",
+                error
+            ))
+        })?;
 
         let buttons: Vec<&Element> = html
             .select(&selector)
@@ -186,21 +287,36 @@ impl MultiUpMirrorLink {
             .collect();
 
         for button in buttons {
-            let host = button.attr("namehost").unwrap().to_owned();
-            let link = button.attr("link").unwrap().to_owned();
+            let host = button
+                .attr("namehost")
+                .ok_or_else(|| {
+                    LinkError::BrowserError("Failed to get host from button".to_string())
+                })?
+                .to_owned();
+
+            let link = button
+                .attr("link")
+                .ok_or_else(|| {
+                    LinkError::BrowserError("Failed to get link from button".to_string())
+                })?
+                .to_owned();
+
             if link.starts_with("/") {
                 continue;
             }
-            let validity = button.attr("validity").unwrap();
-            let validity = match validity {
-                "valid" => LinkValidity::Valid,
-                "invalid" => LinkValidity::Invalid,
-                _ => LinkValidity::Unknown,
+
+            let validity = button.attr("validity").ok_or_else(|| {
+                LinkError::BrowserError("Failed to get validity from button".to_string())
+            })?;
+            let direct_link_validity = match validity {
+                "valid" => DirectLinkValidity::Valid,
+                "invalid" => DirectLinkValidity::Invalid,
+                _ => DirectLinkValidity::Unknown,
             };
-            direct_links.push(DirectLink::new(host, link, validity));
+            direct_links.push(DirectLink::new(host, link, direct_link_validity));
         }
 
-        return direct_links;
+        Ok(direct_links)
     }
 }
 
@@ -232,13 +348,15 @@ fn process_slug(slug: &str) -> (String, bool) {
 mod tests {
     use std::time::Duration;
 
-    use crate::modules::hosting_services::browser::new_browser;
-    use crate::modules::hosting_services::links::{DirectLink, LinkValidity};
+    use crate::modules::hosting_services::browser::{
+        navigate_to_new_tab, new_browser, wait_for_element,
+    };
+    use crate::modules::hosting_services::links::{DirectLink, DirectLinkValidity};
     use crate::modules::hosting_services::multiup::links::{
         process_slug, MultiUpMirrorLink, MultiUpProjectLink,
     };
     use scraper::{Html, Selector};
-    use LinkValidity::Valid;
+    use DirectLinkValidity::Valid;
 
     #[test]
     fn test_process_slug() {
@@ -270,7 +388,9 @@ mod tests {
             "170a7f224e7d146c7116dc377825a38c".to_string(),
         );
 
-        let mirror_links = project_link.get_mirror_links(&browser);
+        let mirror_links = project_link
+            .get_mirror_links(&browser)
+            .expect("Expected mirror links");
         let mirror_links_ids: Vec<&str> =
             mirror_links.iter().map(|link| link.id.as_str()).collect();
         let known_mirror_links_ids = vec![
@@ -280,6 +400,29 @@ mod tests {
         ];
 
         assert_eq!(mirror_links_ids, known_mirror_links_ids);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_invalid_mirror() {
+        let browser = new_browser();
+        let mirror_link = MultiUpMirrorLink::new(
+            "https://multiup.io/en/mirror/84fdbaaa77da3e18106a3f788e1d8c21".to_owned(),
+            "84fdbaaa77da3e18106a3f788e1d8c21".to_string(),
+        );
+
+        let tab = navigate_to_new_tab(&browser, mirror_link.return_mirror_link().as_str());
+        let _ = wait_for_element(&tab, "h2", Some(20), Some(5));
+        if let Ok(warning) =
+            tab.find_element("body > section > div > section > div:nth-child(2) > div > div")
+        {
+            let text = warning
+                .find_element("strong")
+                .expect("Expected warning text element")
+                .get_inner_text()
+                .expect("Expected text");
+            assert_eq!("The requested file could not be found", text);
+        };
     }
 
     #[test]
@@ -300,17 +443,15 @@ mod tests {
         let tab = browser.new_tab().unwrap();
         tab.navigate_to("https://multiup.io/en/mirror/84fdbaaa77da3e18106a3f788e1d8c22")
             .unwrap();
-        let _ = tab.wait_for_element_with_custom_timeout(
-            "body > section > div > section > header > h2",
-            Duration::from_secs(30),
-        );
+        let _ = tab.wait_for_element_with_custom_timeout("h2", Duration::from_secs(30));
         let page_html = tab.get_content().unwrap();
 
         let _ = tab.close(true).unwrap();
 
         let document = Html::parse_document(&page_html);
-        let selector = Selector::parse("body > section > div > section > header > h2").unwrap();
-        let direct_links = MultiUpMirrorLink::grab_direct_links(&document);
+        let selector = Selector::parse("h2").unwrap();
+        let direct_links =
+            MultiUpMirrorLink::grab_direct_links(&document).expect("Expected direct links");
         assert_eq!(direct_links.len(), 1);
         let known_direct_link = DirectLink::new(
             "1fichier.com".to_owned(),
