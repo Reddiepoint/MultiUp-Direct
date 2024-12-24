@@ -242,11 +242,11 @@ impl HostingService for MultiUpMirrorLink {
         };
 
         let document = Html::parse_document(&page_html);
-        let selector = match Selector::parse("h2") {
+        let selector = match Selector::parse("body > section > div > section > header > h2") {
             Ok(selector) => selector,
             Err(error) => {
                 link_information.status = Err(LinkError::BrowserError(format!(
-                    "Failed to parse selector `h2`: {}",
+                    "Failed to parse selector `body > section > div > section > header > h2`: {}",
                     error
                 )));
                 return link_information;

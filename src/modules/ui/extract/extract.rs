@@ -400,31 +400,24 @@ impl ExtractUI {
                     };
                     self.selection_range = (None, None);
                 } else if shift_is_down {
-                    let mut index = (0, 0);
+                    let mut index_of_click = (0, 0);
                     for (id_index, direct_links) in self.direct_links.iter().enumerate() {
                         for (link_index, direct_link) in direct_links.1.iter().enumerate() {
                             if direct_link == link {
-                                index = (id_index, link_index)
+                                index_of_click = (id_index, link_index)
                             }
                         }
                     }
-                    // let index = self
-                    //     .direct_links
-                    //     .iter()
-                    //     .flat_map(|(id, links)| links)
-                    //     .position(|direct_link| direct_link == link)
-                    //     .unwrap();
-
                     match self.selection_range.0 {
                         None => {
-                            self.selection_range.0 = Some(index);
+                            self.selection_range.0 = Some(index_of_click);
                         }
                         Some(start) => {
-                            if start.0 >= index.0 || start.0 == index.0 && start.1 > index.1 {
-                                self.selection_range.0 = Some(index);
+                            if start.0 > index_of_click.0 || start.0 == index_of_click.0 && start.1 > index_of_click.1 {
+                                self.selection_range.0 = Some(index_of_click);
                                 self.selection_range.1 = Some(start);
                             } else {
-                                self.selection_range.1 = Some(index);
+                                self.selection_range.1 = Some(index_of_click);
                             }
                         }
                     }
@@ -451,9 +444,8 @@ impl ExtractUI {
                             self.selected_links.get(id).cloned().unwrap_or_default();
                         let links: Vec<String> = links.iter().cloned().collect();
                         let mut links_to_insert = Vec::new();
-
                         if i == start.0 && i == end.0 {
-                            links_to_insert = links[start.1..end.1].to_vec();
+                            links_to_insert = links[start.1..=end.1].to_vec();
                         } else if i == start.0 {
                             links_to_insert = links[start.1..].to_vec();
                         } else if i == end.0 {
