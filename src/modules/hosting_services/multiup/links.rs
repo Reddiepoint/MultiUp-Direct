@@ -1,9 +1,10 @@
+use std::sync::Arc;
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::extract::recognise_links;
 use crate::modules::hosting_services::links::{
     DirectLink, DirectLinkValidity, HostingService, HostingServiceLink, LinkError, LinkInformation,
 };
-use headless_chrome::Browser;
+use headless_chrome::{Browser, Tab};
 use scraper::node::Element;
 use scraper::{Html, Selector};
 
@@ -36,7 +37,20 @@ impl MultiUpProjectLink {
     }
 
     pub fn get_mirror_links(&self, browser: &Browser) -> Result<Vec<MultiUpMirrorLink>, LinkError> {
-        let tab = navigate_to_new_tab(browser, &self.return_project_link());
+        let tab = match navigate_to_new_tab(browser, &self.return_project_link()) {
+            Ok(tab) => tab,
+            Err((tab, error)) => {
+                if let Some(tab) = tab {
+                    if let Err(error) = tab.close(true) {
+                        return Err(LinkError::BrowserError(format!(
+                            "Failed to close tab: {}",
+                            error
+                        )));
+                    }
+                }
+                return Err(error);
+            }
+        };
 
         // wait_for_element(
         //     &tab,
@@ -93,7 +107,7 @@ impl MultiUpProjectLink {
         };
 
         let document = Html::parse_document(&page_html);
-        let selector =  Selector::parse("#textarea-links-long").map_err(|error| {
+        let selector = Selector::parse("#textarea-links-long").map_err(|error| {
             LinkError::BrowserError(format!(
                 "Failed to parse selector `#textarea-links-long`: {}",
                 error
@@ -154,7 +168,21 @@ impl HostingService for MultiUpMirrorLink {
             Ok(()),
         );
 
-        let tab = navigate_to_new_tab(browser, &self.return_mirror_link());
+        let tab = match navigate_to_new_tab(browser, &self.return_mirror_link()) {
+            Ok(tab) => tab,
+            Err((tab, error)) => {
+                link_information.status = Err(error);
+                if let Some(tab) = tab {
+                    if let Err(error) = tab.close(true) {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to close tab: {}",
+                            error
+                        )));
+                    }
+                }
+                return link_information;
+            }
+        };
         if let Err(error) = wait_for_element(&tab, "h2", Some(20), Some(5)) {
             link_information.status = Err(error);
             return link_information;
@@ -324,12 +352,21 @@ impl MultiUpMirrorLink {
     }
 }
 
-pub fn new_multiup_link(original_link: String, slug: String) -> Result<HostingServiceLink, LinkError> {
+pub fn new_multiup_link(
+    original_link: String,
+    slug: String,
+) -> Result<HostingServiceLink, LinkError> {
     let (id, is_project) = process_slug(&slug)?;
     if is_project {
-        Ok(HostingServiceLink::MultiUpProject(MultiUpProjectLink::new(original_link, id)))
+        Ok(HostingServiceLink::MultiUpProject(MultiUpProjectLink::new(
+            original_link,
+            id,
+        )))
     } else {
-        Ok(HostingServiceLink::MultiUpMirror(MultiUpMirrorLink::new(original_link, id)))
+        Ok(HostingServiceLink::MultiUpMirror(MultiUpMirrorLink::new(
+            original_link,
+            id,
+        )))
     }
 }
 
@@ -417,7 +454,10 @@ mod tests {
             "84fdbaaa77da3e18106a3f788e1d8c21".to_string(),
         );
 
-        let tab = navigate_to_new_tab(&browser, mirror_link.return_mirror_link().as_str());
+        let tab = match navigate_to_new_tab(&browser, mirror_link.return_mirror_link().as_str()) {
+            Ok(tab) => tab,
+            Err(_) => panic!("Failed to navigate to tab")
+        };
         let _ = wait_for_element(&tab, "h2", Some(20), Some(5));
         if let Ok(warning) =
             tab.find_element("body > section > div > section > div:nth-child(2) > div > div")

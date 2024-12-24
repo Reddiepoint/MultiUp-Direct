@@ -35,7 +35,21 @@ impl HostingService for MirroredLink {
             Vec::new(),
             Ok(()),
         );
-        let tab = navigate_to_new_tab(browser, &self.original_link);
+        let tab = match navigate_to_new_tab(browser, &self.original_link) {
+            Ok(tab) => tab,
+            Err((tab, error)) => {
+                link_information.status = Err(error);
+                if let Some(tab) = tab {
+                    if let Err(error) = tab.close(true) {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to close tab: {}",
+                            error
+                        )));
+                    }
+                }
+                return link_information;
+            }
+        };
 
         if let Ok(_warning) = tab.find_element(".error") {
             link_information.status = Err(LinkError::InvalidLink("File not found".to_string()));
@@ -233,10 +247,7 @@ impl MirroredLink {
 
         let host_links: Vec<Option<String>> = html
             .select(&selector)
-            .map(|element| {
-                element
-                    .attr("href").map(Self::get_getlink_link)
-            })
+            .map(|element| element.attr("href").map(Self::get_getlink_link))
             .collect();
         if host_links.iter().any(|links| links.is_none()) {
             return Err(LinkError::BrowserError(
@@ -287,7 +298,20 @@ impl MirroredLink {
             .collect();
         let direct_links: Vec<Result<DirectLink, LinkError>> = hosts.into_par_iter()
             .map(|(link, validity)| {
-                let tab = navigate_to_new_tab(browser, &link);
+                let tab = match navigate_to_new_tab(browser, &link) {
+                    Ok(tab) => tab,
+                    Err((tab, error)) => {
+                        if let Some(tab) = tab {
+                            if let Err(error) = tab.close(true) {
+                                return Err(LinkError::BrowserError(format!(
+                                    "Failed to close tab: {}",
+                                    error
+                                )));
+                            }
+                        }
+                        return Err(error);
+                    }
+                };
                 wait_for_element(&tab, "code", None, None)?;
                 let page_html = match tab.get_content() {
                     Ok(html) => html,
@@ -385,7 +409,10 @@ mod tests {
         for i in 0..1 {
             println!("Iteration {}", i);
             let browser = new_browser();
-            let tab = navigate_to_new_tab(&browser, url);
+            let tab = match navigate_to_new_tab(&browser, url) {
+                Ok(tab) => tab,
+                Err(_) => panic!()
+            };
             MirroredLink::navigate_to_file_links(&tab);
 
             assert!(wait_for_element(&tab, "#result", None, None).is_ok());
@@ -401,7 +428,10 @@ mod tests {
         for i in 0..1 {
             println!("Iteration {}", i);
             let browser = new_browser();
-            let tab = navigate_to_new_tab(&browser, url);
+            let tab = match navigate_to_new_tab(&browser, url) {
+                Ok(tab) => tab,
+                Err(_) => panic!("Failed to navigate to tab")
+            };
             MirroredLink::click_check_link_status(&tab);
             let statuses = tab
                 .find_elements("td[data-label='Link Status'] > span > div > div")

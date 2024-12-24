@@ -63,7 +63,7 @@ pub fn recognise_links(raw_hosting_service_links: &str) -> Vec<HostingServiceLin
         }
     }
 
-    return detected_hoster_links;
+    detected_hoster_links
 }
 
 async fn extract_download_links(
