@@ -154,8 +154,5 @@ async fn extract_download_links(
     }
 
     let link_informations: Vec<LinkInformation> = final_link_informations.into_values().collect();
-    for link_information in &link_informations {
-        println!("{}: {} | Status: {:?}", link_information.original_link, link_information.filename, link_information.status.clone().map_err(|error| error.get_error_message()));
-    }
     link_informations
 }

@@ -482,12 +482,14 @@ impl ExtractUI {
     fn display_footer(&mut self, ctx: &Context) {
         TopBottomPanel::bottom("Information Footer").show(ctx, |ui| {
             let successful_links = self.links_information.iter().filter(|link| link.status.is_ok()).count();
+            let selected_links = self.selected_links.values().map(|links| links.len()).sum::<usize>();
+            let direct_links = self.direct_links.iter().map(|(_id, links)| links.len()).sum::<usize>();
             ui.label(format!(
                 "Extracted links: {}/{} | Selected links: {}/{}",
                 successful_links,
                 self.links_information.len(),
-                self.selected_links.len(),
-                self.direct_links.len()
+                selected_links,
+                direct_links
             ));
         });
     }
