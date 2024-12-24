@@ -5,7 +5,6 @@ use crate::modules::hosting_services::links::{
 };
 use headless_chrome::Browser;
 use scraper::node::Element;
-use scraper::selectable::Selectable;
 use scraper::{Html, Selector};
 
 pub struct MultiUpProjectLink {
@@ -94,7 +93,12 @@ impl MultiUpProjectLink {
         };
 
         let document = Html::parse_document(&page_html);
-        let selector = Selector::parse("#textarea-links-long").unwrap();
+        let selector =  Selector::parse("#textarea-links-long").map_err(|error| {
+            LinkError::BrowserError(format!(
+                "Failed to parse selector `#textarea-links-long`: {}",
+                error
+            ))
+        })?;
 
         let mirror_links = match document.select(&selector).next() {
             Some(element) => match element.text().next() {
@@ -141,8 +145,8 @@ impl HostingService for MultiUpMirrorLink {
     fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
         let mut link_information = LinkInformation::new(
             self.original_link.clone(),
-            "multiup.io".to_string(),
-            self.id.clone(),
+            self.get_domain().to_string(),
+            self.get_id().to_string(),
             String::new(),
             0.0,
             String::new(),
@@ -269,7 +273,7 @@ impl MultiUpMirrorLink {
         let size = parts[parts.len() - 3].parse::<f32>().unwrap_or_default();
         let unit = parts[parts.len() - 2].to_uppercase();
 
-        return (title, size, unit);
+        (title, size, unit)
     }
 
     fn grab_direct_links(html: &Html) -> Result<Vec<DirectLink>, LinkError> {
@@ -320,16 +324,16 @@ impl MultiUpMirrorLink {
     }
 }
 
-pub fn new_multiup_link(original_link: String, slug: String) -> HostingServiceLink {
-    let (id, is_project) = process_slug(&slug);
+pub fn new_multiup_link(original_link: String, slug: String) -> Result<HostingServiceLink, LinkError> {
+    let (id, is_project) = process_slug(&slug)?;
     if is_project {
-        HostingServiceLink::MultiUpProject(MultiUpProjectLink::new(original_link, id))
+        Ok(HostingServiceLink::MultiUpProject(MultiUpProjectLink::new(original_link, id)))
     } else {
-        HostingServiceLink::MultiUpMirror(MultiUpMirrorLink::new(original_link, id))
+        Ok(HostingServiceLink::MultiUpMirror(MultiUpMirrorLink::new(original_link, id)))
     }
 }
 
-fn process_slug(slug: &str) -> (String, bool) {
+fn process_slug(slug: &str) -> Result<(String, bool), LinkError> {
     let mut id = String::new();
     let mut is_project = false;
     for path in slug.split('/') {
@@ -339,8 +343,10 @@ fn process_slug(slug: &str) -> (String, bool) {
             is_project = true;
         }
     }
-
-    return (id, is_project);
+    if id.is_empty() {
+        return Err(LinkError::InvalidLink("Invalid slug".to_string()));
+    }
+    Ok((id, is_project))
 }
 
 // Tests
@@ -362,19 +368,19 @@ mod tests {
     fn test_process_slug() {
         // Short download link
         let slug = "84fdbaaa77da3e18106a3f788e1d8c22";
-        let (id, is_project) = process_slug(slug);
+        let (id, is_project) = process_slug(slug).expect("Expected valid slug");
         assert_eq!(id, "84fdbaaa77da3e18106a3f788e1d8c22");
         assert!(!is_project);
 
         // Long download link
         let slug = "download/84fdbaaa77da3e18106a3f788e1d8c22/Abc_news_radio_intro.mid";
-        let (id, is_project) = process_slug(slug);
+        let (id, is_project) = process_slug(slug).expect("Expected valid slug");
         assert_eq!(id, "84fdbaaa77da3e18106a3f788e1d8c22");
         assert!(!is_project);
 
         // Project link
         let slug = "project/170a7f224e7d146c7116dc377825a38c";
-        let (id, is_project) = process_slug(slug);
+        let (id, is_project) = process_slug(slug).expect("Expected valid slug");
         assert_eq!(id, "170a7f224e7d146c7116dc377825a38c");
         assert!(is_project);
     }

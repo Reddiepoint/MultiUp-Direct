@@ -46,16 +46,18 @@ pub fn recognise_links(raw_hosting_service_links: &str) -> Vec<HostingServiceLin
     {
         match domain {
             "multiup.io" | "multiup.org" => {
-                let multiup_link = new_multiup_link(link.to_owned(), slug.to_owned());
-                if !detected_hoster_links.contains(&multiup_link) {
-                    detected_hoster_links.push(multiup_link);
-                }
+                if let Ok(multiup_link) = new_multiup_link(link.to_owned(), slug.to_owned()) {
+                    if !detected_hoster_links.contains(&multiup_link) {
+                        detected_hoster_links.push(multiup_link);
+                    }
+                };
             }
             "mirrored.to" | "micr.cr" => {
-                let mirrored_link = new_mirrored_link(link.to_owned(), slug.to_owned());
-                if !detected_hoster_links.contains(&mirrored_link) {
-                    detected_hoster_links.push(mirrored_link);
-                }
+                if let Ok(mirrored_link) = new_mirrored_link(link.to_owned(), slug.to_owned()) {
+                    if !detected_hoster_links.contains(&mirrored_link) {
+                        detected_hoster_links.push(mirrored_link);
+                    }
+                };
             }
             _ => {}
         }

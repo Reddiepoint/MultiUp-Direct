@@ -1,8 +1,7 @@
-use headless_chrome::Browser;
-use std::fmt::{Debug, Display, Formatter};
-
 use crate::modules::hosting_services::mirrored::links::MirroredLink;
 use crate::modules::hosting_services::multiup::links::{MultiUpMirrorLink, MultiUpProjectLink};
+use headless_chrome::Browser;
+use std::fmt::{Debug, Display, Formatter};
 
 /// Represents all the different types of hosting services.
 pub enum HostingServiceLink {
