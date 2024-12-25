@@ -250,13 +250,57 @@ impl DebridUI {
     fn display_output_area(&mut self, ui: &mut Ui) {
         ui.heading("Debrid Links");
 
+        // Create a user non-editable copy
+        let mut debrid_links = self.debrid_links_display.clone();
+        
         // Copy buttons
         ui.horizontal(|ui| {
-            // TODO: Normal copy, copy with quotes and new line, copy with quotes and spaces
+            let mut copy_buttons = vec![];
+            let copy_normal_button = ui.button("Copy");
+            copy_buttons.push(copy_normal_button);
+            
+            let copy_quote_button = ui.button("Copy as \"{URL}\"");
+            if copy_quote_button.hovered() {
+                let mut new_debrid_links = String::new();
+                let links = debrid_links.split('\n');
+                for link in links {
+                    new_debrid_links = format!("{}\"{}\"\n", new_debrid_links, link);
+                }
+                debrid_links = new_debrid_links.trim().to_string()
+            }
+            
+            copy_buttons.push(copy_quote_button);
+
+            let copy_quote_and_spaces_button = ui.button("Copy as \"{URL}\" with spaces");
+            if copy_quote_and_spaces_button.hovered() {
+                let mut new_debrid_links = String::new();
+                let links = debrid_links.split('\n');
+                for link in links {
+                    new_debrid_links = format!("{}\"{}\" ", new_debrid_links, link);
+                }
+                debrid_links = new_debrid_links.trim().to_string()
+            }
+            
+            copy_buttons.push(copy_quote_and_spaces_button);
+            
+            let copy_quote_and_commas_button = ui.button("Copy as \"{URL}\",");
+            if copy_quote_and_commas_button.hovered() {
+                let mut new_debrid_links = String::new();
+                let links = debrid_links.split('\n');
+                for link in links {
+                    new_debrid_links = format!("{}\"{}\", ", new_debrid_links, link);
+                }
+                debrid_links = new_debrid_links.trim().to_string()
+            }
+            copy_buttons.push(copy_quote_and_commas_button);
+            copy_buttons.iter().for_each(|button| {
+                if button.clicked() {
+                    ui.output_mut(|output| output.copied_text = debrid_links.clone());
+                    new_success_toast(&mut self.toasts, "Copied links to clipboard.", None, None);
+                }
+            });
         });
 
-        // Create uneditable copy
-        let mut debrid_links = self.debrid_links_display.clone();
         ScrollArea::both()
             .id_salt("Debrid Links Box")
             .max_height(ui.available_height())
