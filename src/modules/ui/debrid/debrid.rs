@@ -123,7 +123,7 @@ impl DebridUI {
                             );
                             Config::default()
                         }
-                        ConfigError::Other(error) => {
+                        ConfigError::Unknown(error) => {
                             new_error_toast(&mut self.toasts, &error, None, None);
                             Config::default()
                         }
@@ -152,7 +152,7 @@ impl DebridUI {
                             ConfigError::InvalidJson => {
                                 "Error saving config: Invalid JSON".to_string()
                             }
-                            ConfigError::Other(error) => {
+                            ConfigError::Unknown(error) => {
                                 "Error saving config: ".to_string() + &error
                             }
                             _ => "Error saving config.".to_string(),

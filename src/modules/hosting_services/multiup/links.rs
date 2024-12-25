@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::modules::config::read_config;
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::extract::recognise_links;
 use crate::modules::hosting_services::links::{
     DirectLink, DirectLinkValidity, HostingService, HostingServiceLink, LinkError, LinkInformation,
 };
-use headless_chrome::{Browser, Tab};
+use headless_chrome::Browser;
 use scraper::node::Element;
 use scraper::{Html, Selector};
 
@@ -52,13 +52,96 @@ impl MultiUpProjectLink {
             }
         };
 
-        // wait_for_element(
-        //     &tab,
-        //     "h2",
-        //     Some(20),
-        //     Some(5),
-        // )?;
 
+        // Check for password
+        if let Ok(password_box) = tab.clone().find_element("input[name='password'][type='password']") {
+            let passwords = match read_config() {
+                Ok(config) => config.hosting_passwords,
+                Err(error) => {
+                    return Err(LinkError::PasswordProtected(format!(
+                        "Failed to read config: {}",
+                        error.get_error_message()
+                    )));
+                }
+            };
+
+            for password in passwords {
+                println!("Trying password: {}", password);
+                let password_box = match tab.find_element("input[name='password'][type='password']") {
+                    Ok(password_box) => password_box,
+                    Err(error) => {
+                        return Err(LinkError::BrowserError(format!(
+                            "Failed to find password box: {}",
+                            error
+                        )));
+                    }
+                };
+                if let Err(error) = password_box.type_into(&password) {
+                    return Err(LinkError::BrowserError(format!(
+                        "Failed to type password: {}",
+                        error
+                    )));
+                };
+                match tab.find_element("button[type='submit']") {
+                    Ok(view_files_button) => match view_files_button.click() {
+                        Ok(_) => {
+                            if let Err(error) = tab.wait_until_navigated() {
+                                return Err(LinkError::BrowserError(format!(
+                                    "Failed to navigate to project links: {}",
+                                    error
+                                )));
+                            }
+                            
+                            wait_for_element(&tab, "h2", None, None)?;
+
+                            if let Ok(warning) =
+                                tab.find_element(".alert.alert-danger.alert-dismissible")
+                            {
+                                if warning
+                                    .get_inner_text()
+                                    .is_ok_and(|text| text.contains("Wrong password"))
+                                {
+                                    continue;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            return Err(LinkError::BrowserError(format!(
+                                "Failed to click View Files button: {}",
+                                error
+                            )));
+                        }
+                    },
+                    Err(error) => {
+                        return Err(LinkError::BrowserError(format!(
+                            "Failed to click View Files button: {}",
+                            error
+                        )));
+                    }
+                }
+            }
+
+            if let Ok(warning) =
+                tab.find_element(".alert.alert-danger.alert-dismissible")
+            {
+                if warning
+                    .get_inner_text()
+                    .is_ok_and(|text| text.contains("Wrong password"))
+                {
+                    if let Err(error) = tab.close(true) {
+                         return Err(LinkError::BrowserError(format!(
+                            "Failed to close tab: {}",
+                            error
+                        )));
+                    }
+                    return Err(LinkError::PasswordProtected(
+                        "Wrong password".to_string(),
+                    ));
+                }
+            }
+        }
         if let Ok(warning) = tab.find_element(".alert.alert-danger > strong") {
             let error = match warning.get_inner_text() {
                 Ok(text) => match text.as_str() {
@@ -168,7 +251,7 @@ impl HostingService for MultiUpMirrorLink {
             Ok(()),
         );
 
-        let tab = match navigate_to_new_tab(browser, &self.return_mirror_link()) {
+        let mut tab = match navigate_to_new_tab(browser, &self.return_mirror_link()) {
             Ok(tab) => tab,
             Err((tab, error)) => {
                 link_information.status = Err(error);
@@ -187,6 +270,135 @@ impl HostingService for MultiUpMirrorLink {
             link_information.status = Err(error);
             return link_information;
         };
+
+        // Check for password
+        if let Ok(password_box) = tab.clone().find_element("input[name='password'][type='password']") {
+            let passwords = match read_config() {
+                Ok(config) => config.hosting_passwords,
+                Err(error) => {
+                    link_information.status = Err(LinkError::PasswordProtected(format!(
+                        "Failed to read config: {}",
+                        error.get_error_message()
+                    )));
+                    return link_information;
+                }
+            };
+
+            for password in passwords {
+                let password_box = match tab.find_element("input[name='password'][type='password']") {
+                    Ok(password_box) => password_box,
+                    Err(error) => {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to find password box: {}",
+                            error
+                        )));
+                        return link_information;
+                    }
+                };
+                if let Err(error) = password_box.type_into(&password) {
+                    link_information.status = Err(LinkError::BrowserError(format!(
+                        "Failed to type password: {}",
+                        error
+                    )));
+                    return link_information;
+                };
+                match tab.find_element("button[type='submit']") {
+                    Ok(download_button) => match download_button.click() {
+                        Ok(_) => {
+                            browser.register_missing_tabs();
+
+                            if let Err(error) = tab.close(true) {
+                                link_information.status = Err(LinkError::BrowserError(format!(
+                                    "Failed to close tab: {}",
+                                    error
+                                )));
+                                return link_information;
+                            };
+
+                            let tabs = browser.get_tabs();
+                            match tabs.lock() {
+                                Ok(tabs) => {
+                                    match tabs
+                                        .iter()
+                                        .find(|tab| tab.get_url().contains(self.get_id()))
+                                    {
+                                        None => {
+                                            link_information.status = Err(LinkError::BrowserError(
+                                                "Failed to navigate to mirror links".to_string(),
+                                            ));
+                                            return link_information;
+                                        }
+                                        Some(new_tab) => {
+                                            tab = new_tab.clone();
+                                        }
+                                    }
+                                }
+                                Err(error) => {
+                                    link_information.status = Err(LinkError::BrowserError(format!(
+                                        "Failed to get tabs: {}",
+                                        error
+                                    )));
+                                    return link_information;
+                                }
+                            }
+                            if let Err(error) = tab.wait_until_navigated() {
+                                link_information.status = Err(LinkError::BrowserError(format!(
+                                    "Failed to navigate to mirror links: {}",
+                                    error
+                                )));
+                                return link_information;
+                            }
+
+                            if let Ok(warning) =
+                                tab.find_element(".alert.alert-danger.alert-dismissible")
+                            {
+                                if warning
+                                    .get_inner_text()
+                                    .is_ok_and(|text| text.contains("Wrong password"))
+                                {
+                                    continue;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            link_information.status = Err(LinkError::BrowserError(format!(
+                                "Failed to click Download button: {}",
+                                error
+                            )));
+                            return link_information;
+                        }
+                    },
+                    Err(error) => {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to click Download button: {}",
+                            error
+                        )))
+                    }
+                }
+            }
+
+            if let Ok(warning) =
+                tab.find_element(".alert.alert-danger.alert-dismissible")
+            {
+                if warning
+                    .get_inner_text()
+                    .is_ok_and(|text| text.contains("Wrong password"))
+                {
+                    if let Err(error) = tab.close(true) {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to close tab: {}",
+                            error
+                        )));
+                    }
+                    link_information.status = Err(LinkError::PasswordProtected(
+                        "Wrong password".to_string(),
+                    ));
+                    return link_information;
+                }
+            }  
+        }
 
         if let Ok(warning) = tab.find_element(".alert.alert-danger > strong") {
             let error = match warning.get_inner_text() {
@@ -456,7 +668,7 @@ mod tests {
 
         let tab = match navigate_to_new_tab(&browser, mirror_link.return_mirror_link().as_str()) {
             Ok(tab) => tab,
-            Err(_) => panic!("Failed to navigate to tab")
+            Err(_) => panic!("Failed to navigate to tab"),
         };
         let _ = wait_for_element(&tab, "h2", Some(20), Some(5));
         if let Ok(warning) =

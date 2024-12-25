@@ -115,8 +115,9 @@ pub trait HostingService {
 #[derive(Clone, Debug)]
 pub enum LinkError {
     BrowserError(String),
-    TimedOut(String, u64),
     InvalidLink(String),
+    PasswordProtected(String),  
+    TimedOut(String, u64),
     Unknown(String),
 }
 
@@ -134,6 +135,9 @@ impl Display for LinkError {
             }
             LinkError::BrowserError(error) => {
                 write!(f, "Browser error: {}", error)
+            }
+            LinkError::PasswordProtected(error) => {
+                write!(f, "Link is password protected: {}", error)
             }
         }
     }
@@ -153,6 +157,9 @@ impl LinkError {
             }
             LinkError::BrowserError(error) => {
                 format!("Browser error: {}", error)
+            }
+            LinkError::PasswordProtected(error) => {
+                format!("Link is password protected: {}", error)
             }
         }
     }

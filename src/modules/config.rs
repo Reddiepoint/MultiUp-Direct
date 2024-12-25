@@ -23,8 +23,25 @@ impl Default for Config {
 pub enum ConfigError {
     ConfigNotFound,
     InvalidJson,
-    Other(String),
+    Unknown(String),
 }
+
+impl ConfigError {
+    pub fn get_error_message(&self) -> String {
+        match self {
+            ConfigError::ConfigNotFound => {
+                "Config file not found.".to_string()
+            }
+            ConfigError::InvalidJson => {
+                "Invalid JSON in config file.".to_string()
+            }
+            ConfigError::Unknown(error) => {
+                format!("Unknown error: {}", error)
+            }
+        }
+    }
+}
+
 pub fn read_config() -> Result<Config, ConfigError> {
     match std::fs::read_to_string("config.json") {
         Ok(config) => match serde_json::from_str(&config) {
@@ -36,7 +53,7 @@ pub fn read_config() -> Result<Config, ConfigError> {
         },
         Err(error) => match error.kind() {
             ErrorKind::NotFound => Err(ConfigError::ConfigNotFound),
-            _ => Err(ConfigError::Other(error.to_string())),
+            _ => Err(ConfigError::Unknown(error.to_string())),
         },
     }
 }
@@ -44,7 +61,7 @@ pub fn read_config() -> Result<Config, ConfigError> {
 pub fn save_config(config: &Config) -> Result<(), ConfigError> {
     let json = serde_json::to_string_pretty(config).unwrap();
     if let Err(error) = std::fs::write("config.json", json) {
-        return Err(ConfigError::Other(error.to_string()));
+        return Err(ConfigError::Unknown(error.to_string()));
     };
     Ok(())
 }
