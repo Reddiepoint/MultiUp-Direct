@@ -56,7 +56,7 @@ impl Default for ExtractUI {
             passwords_open: false,
             passwords_text: match read_config() {
                 Ok(config) => config.hosting_passwords.join("\n"),
-                Err(error) => String::new(),
+                Err(_error) => String::new(),
             },
         }
     }
@@ -162,7 +162,7 @@ impl ExtractUI {
         let mut filtered_links_hosts = vec![];
         let mut direct_links = vec![];
         let mut link_table_information = vec![];
-        for link_information in &self.links_information {
+        for link_information in self.links_information.iter() {
             if let Ok(()) = link_information.status {
                 let filename = match self.search_query.chars().any(|char| char.is_uppercase()) {
                     true => &link_information.filename,
@@ -227,6 +227,7 @@ impl ExtractUI {
         enum ToastType {
             CopyAll,
             CopySelected,
+            FailedtoSave(String),
             SaveAllAsTXT(String),
             SaveSelectedAsTXT(String),
             NoLinks,
@@ -289,7 +290,10 @@ impl ExtractUI {
                     toast_type = ToastType::NoLinks;
                     return;
                 }
-                save_to_file(&text_file_name, &links_text);
+                if let Err(error) = save_to_file(&text_file_name, &links_text) {
+                    toast_type = ToastType::FailedtoSave(error);
+                    return;
+                };
                 toast_type = ToastType::SaveAllAsTXT(text_file_name);
             }
 
@@ -315,7 +319,10 @@ impl ExtractUI {
                     .expect("Time went backwards")
                     .as_secs();
                 let text_file_name = format!("extracted_links_{}.txt", time_stamp);
-                save_to_file(&text_file_name, &links_text);
+                if let Err(error) = save_to_file(&text_file_name, &links_text) {
+                    toast_type = ToastType::FailedtoSave(error);
+                    return;
+                };
                 toast_type = ToastType::SaveSelectedAsTXT(text_file_name);
             }
         });
@@ -335,6 +342,12 @@ impl ExtractUI {
             ToastType::CopySelected => new_info_toast(
                 &mut self.toasts,
                 "Copied selected links to clipboard.",
+                None,
+                None,
+            ),
+            ToastType::FailedtoSave(error) => new_error_toast(
+                &mut self.toasts,
+                format!("Failed to save links to file: {}", error).as_str(),
                 None,
                 None,
             ),

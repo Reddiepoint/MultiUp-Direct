@@ -28,7 +28,7 @@ impl HostingService for HostingServiceLink {
     }
 
     /// Unimplemented
-    fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
+    fn get_link_information(&self, _browser: &Browser, _recheck_validity: bool) -> LinkInformation {
         unimplemented!()
     }
 }
