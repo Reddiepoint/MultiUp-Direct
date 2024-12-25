@@ -52,7 +52,7 @@ pub fn recognise_links(raw_hosting_service_links: &str) -> Vec<HostingServiceLin
                     }
                 };
             }
-            "mirrored.to" | "micr.cr" => {
+            "mirrored.to" | "mir.cr" => {
                 if let Ok(mirrored_link) = new_mirrored_link(link.to_owned(), slug.to_owned()) {
                     if !detected_hoster_links.contains(&mirrored_link) {
                         detected_hoster_links.push(mirrored_link);
