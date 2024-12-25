@@ -76,9 +76,12 @@ impl HelpUI {
             });
 
             ui.heading("Extract");
-            ui.label("Extracts direct links from MultiUp or Mirrored.\n\n\
+            ui.label("Extracts direct links from MultiUp or Mirrored. MultiUp requires intervention \
+            for at least the first link in order to pass the Cloudflare protection. You may refresh the \
+            other pages after you have passed the Captcha, but they may appear again.\n\n\
             Links are detected using RegEx, so more complicated text such as HTML can be pasted. \
-            Duplicate links will be filtered out, excluding links in projects.\n\n\
+            Duplicate links will be filtered out, excluding links in projects. A list of passwords \
+            can be chosen for password protected links. \n\n\
             Use CTRL and SHIFT to quickly select multiple links.");
 
             ui.separator();
