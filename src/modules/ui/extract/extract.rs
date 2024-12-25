@@ -1,3 +1,4 @@
+use crate::modules::config::{read_config, save_config, Config};
 use crate::modules::general::{copy_to_clipboard, save_to_file};
 use crate::modules::hosting_services::extract::extract_raw_links;
 use crate::modules::hosting_services::links::LinkInformation;
@@ -14,7 +15,6 @@ use regex::Regex;
 use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Default)]
 pub struct ExtractUI {
     toasts: Toasts,
     // Channels
@@ -33,17 +33,45 @@ pub struct ExtractUI {
     // Footer
     // Error log
     error_log_open: bool,
+    // Passwords
+    passwords_open: bool,
+    passwords_text: String,
+}
+
+impl Default for ExtractUI {
+    fn default() -> Self {
+        Self {
+            toasts: new_toasts(),
+            links_receiver: None,
+            hosting_links: String::new(),
+            recheck_validity: false,
+            extracting: false,
+            links_information: Vec::new(),
+            filter_menu: FilterMenu::default(),
+            search_query: String::new(),
+            selection_range: (None, None),
+            direct_links: Vec::new(),
+            selected_links: Default::default(),
+            error_log_open: false,
+            passwords_open: false,
+            passwords_text: match read_config() {
+                Ok(config) => config.hosting_passwords.join("\n"),
+                Err(error) => String::new(),
+            },
+        }
+    }
 }
 
 impl ExtractUI {
     pub fn display(ctx: &Context, ui: &mut Ui, extract_ui: &mut ExtractUI) {
-        extract_ui.toasts = new_toasts();
+        // extract_ui.toasts = new_toasts();
         extract_ui.receive_channels();
         extract_ui.display_input_area(ui);
         ui.separator();
         extract_ui.display_footer(ctx);
         extract_ui.display_output_area(ui);
         extract_ui.display_error_log(ctx);
+        extract_ui.display_passwords(ctx);
         extract_ui.toasts.show(ctx);
     }
 
@@ -121,6 +149,10 @@ impl ExtractUI {
 
             if ui.button("See errors").clicked() {
                 self.error_log_open = true;
+            }
+
+            if ui.button("See passwords").clicked() {
+                self.passwords_open = true;
             }
         });
     }
@@ -413,7 +445,9 @@ impl ExtractUI {
                             self.selection_range.0 = Some(index_of_click);
                         }
                         Some(start) => {
-                            if start.0 > index_of_click.0 || start.0 == index_of_click.0 && start.1 > index_of_click.1 {
+                            if start.0 > index_of_click.0
+                                || start.0 == index_of_click.0 && start.1 > index_of_click.1
+                            {
                                 self.selection_range.0 = Some(index_of_click);
                                 self.selection_range.1 = Some(start);
                             } else {
@@ -481,9 +515,21 @@ impl ExtractUI {
 
     fn display_footer(&mut self, ctx: &Context) {
         TopBottomPanel::bottom("Information Footer").show(ctx, |ui| {
-            let successful_links = self.links_information.iter().filter(|link| link.status.is_ok()).count();
-            let selected_links = self.selected_links.values().map(|links| links.len()).sum::<usize>();
-            let direct_links = self.direct_links.iter().map(|(_id, links)| links.len()).sum::<usize>();
+            let successful_links = self
+                .links_information
+                .iter()
+                .filter(|link| link.status.is_ok())
+                .count();
+            let selected_links = self
+                .selected_links
+                .values()
+                .map(|links| links.len())
+                .sum::<usize>();
+            let direct_links = self
+                .direct_links
+                .iter()
+                .map(|(_id, links)| links.len())
+                .sum::<usize>();
             ui.label(format!(
                 "Extracted links: {}/{} | Selected links: {}/{}",
                 successful_links,
@@ -539,6 +585,61 @@ impl ExtractUI {
             });
     }
 
+    pub fn display_passwords(&mut self, ctx: &Context) {
+        Window::new("Mirror Passwords")
+            .open(&mut self.passwords_open)
+            .show(ctx, |ui| {
+                if ui.button("Save passwords").clicked() {
+                    let mut config = match read_config() {
+                        Ok(config) => config,
+                        Err(error) => {
+                            new_error_toast(
+                                &mut self.toasts,
+                                format!("Error reading config: {}", error.get_error_message())
+                                    .as_str(),
+                                None,
+                                None,
+                            );
+                            Config::default()
+                        }
+                    };
+
+                    let passwords = self
+                        .passwords_text
+                        .split("\n")
+                        .filter(|password| !password.is_empty())
+                        .map(|password| password.to_owned())
+                        .collect::<Vec<String>>();
+
+                    config.hosting_passwords = passwords;
+
+                    match save_config(&config) {
+                        Ok(_) => {
+                            new_success_toast(
+                                &mut self.toasts,
+                                "Successfully saved passwords.",
+                                None,
+                                None,
+                            );
+                        }
+                        Err(error) => {
+                            new_error_toast(
+                                &mut self.toasts,
+                                format!("Error saving config: {}", error.get_error_message())
+                                    .as_str(),
+                                None,
+                                None,
+                            );
+                        }
+                    }
+                }
+                ui.add(
+                    TextEdit::multiline(&mut self.passwords_text)
+                        .hint_text("Enter your passwords here, on each line")
+                        .desired_width(ui.available_width()),
+                );
+            });
+    }
     fn copy_selected_links(&self, ui: &Ui) {
         let links: Vec<String> = self
             .selected_links
