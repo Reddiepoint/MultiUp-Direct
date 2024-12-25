@@ -1,8 +1,7 @@
+use headless_chrome::{Browser, Element, LaunchOptionsBuilder, Tab};
 use std::ffi::OsStr;
 use std::sync::Arc;
 use std::time::Duration;
-use eframe::egui::WidgetType::Link;
-use headless_chrome::{Browser, Element, LaunchOptionsBuilder, Tab};
 
 use crate::modules::hosting_services::links::LinkError;
 
@@ -25,20 +24,32 @@ pub fn new_browser() -> Browser {
     browser
 }
 
-pub fn navigate_to_new_tab(browser: &Browser, url: &str) -> Result<Arc<Tab>, (Option<Arc<Tab>>, LinkError)> {
+pub fn navigate_to_new_tab(
+    browser: &Browser,
+    url: &str,
+) -> Result<Arc<Tab>, (Option<Arc<Tab>>, LinkError)> {
     let tab = match browser.new_tab() {
         Ok(tab) => tab,
         Err(error) => {
-            return Err((None, LinkError::BrowserError(format!("Failed to create new tab: {}", error))));
+            return Err((
+                None,
+                LinkError::BrowserError(format!("Failed to create new tab: {}", error)),
+            ));
         }
     };
 
     if let Err(error) = tab.navigate_to(url) {
-        return Err((Some(tab), LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error))));
+        return Err((
+            Some(tab),
+            LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error)),
+        ));
     }
 
     if let Err(error) = tab.wait_until_navigated() {
-        return Err((Some(tab), LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error))));
+        return Err((
+            Some(tab),
+            LinkError::BrowserError(format!("Failed to navigate to URL {}: {}", url, error)),
+        ));
     };
 
     Ok(tab)
@@ -63,9 +74,11 @@ pub fn wait_for_element<'a>(
                 return Ok(element);
             }
             Err(error) => {
-                let _ = tab.reload(false, None);
                 error_message = Some(error.to_string());
                 total_retries += 1;
+                if total_retries <= retries.unwrap_or(0) {
+                    let _ = tab.reload(false, None);
+                }
             }
         }
     }
@@ -82,10 +95,7 @@ pub fn wait_for_element<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use headless_chrome::Tab;
     use crate::modules::hosting_services::browser::{navigate_to_new_tab, new_browser};
-    use crate::modules::hosting_services::links::LinkError;
 
     #[test]
     #[ignore]
@@ -93,7 +103,7 @@ mod tests {
         let browser = new_browser();
         let _tab = match navigate_to_new_tab(&browser, "https://google.com") {
             Ok(_) => {}
-            Err(_) => panic!("Failed to navigate to tab")
+            Err(_) => panic!("Failed to navigate to tab"),
         };
     }
 }
