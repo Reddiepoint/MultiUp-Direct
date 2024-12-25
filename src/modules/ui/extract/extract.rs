@@ -151,7 +151,7 @@ impl ExtractUI {
                 self.error_log_open = true;
             }
 
-            if ui.button("See passwords").clicked() {
+            if ui.button("Set passwords").clicked() {
                 self.passwords_open = true;
             }
         });
