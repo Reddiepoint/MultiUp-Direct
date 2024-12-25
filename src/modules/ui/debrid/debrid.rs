@@ -8,7 +8,6 @@ use eframe::egui::{Button, ComboBox, Context, ScrollArea, TextEdit, TopBottomPan
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
 
-#[derive(Default)]
 pub struct DebridUI {
     toasts: Toasts,
     // Channels
@@ -27,9 +26,24 @@ pub struct DebridUI {
     error_log_open: bool,
 }
 
+impl Default for DebridUI {
+    fn default() -> Self {
+        Self {
+            toasts: new_toasts(),
+            links_receiver: None,
+            debrid_service: DebridService::default(),
+            api_keys: DebridAPIKeys::default(),
+            use_remote_traffic: false,
+            hosting_links: String::new(),
+            unlocking: false,
+            debrid_links: Vec::new(),
+            debrid_links_display: String::new(),
+            error_log_open: false,
+        }   
+    }
+}
 impl DebridUI {
     pub fn display(ctx: &Context, ui: &mut Ui, debrid_ui: &mut DebridUI) {
-        debrid_ui.toasts = new_toasts();
         debrid_ui.receive_channels();
         debrid_ui.display_input_area(ui);
         ui.separator();

@@ -1,3 +1,4 @@
+use crate::modules::config::read_config;
 use crate::modules::hosting_services::browser::{navigate_to_new_tab, wait_for_element};
 use crate::modules::hosting_services::links::{
     DirectLink, DirectLinkValidity, HostingService, HostingServiceLink, LinkError, LinkInformation,
@@ -69,6 +70,88 @@ impl HostingService for MirroredLink {
             };
         }
 
+        // Check for password
+        if let Ok(_password) = tab.find_element("#passcheck") {
+            let passwords = match read_config() {
+                Ok(config) => config.hosting_passwords,
+                Err(error) => {
+                    link_information.status = Err(LinkError::PasswordProtected(format!(
+                        "Failed to read config: {}",
+                        error.get_error_message()
+                    )));
+                    return link_information;
+                }
+            };
+
+            for password in passwords {
+                if tab.find_element(".swal-modal").is_ok() {
+                    if let Err(error) = tab.reload(false, None) {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to reload tab: {}",
+                            error
+                        )));
+                        return link_information;
+                    }
+                    if let Err(error) = tab.wait_until_navigated() {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to reload tab: {}",
+                            error
+                        )));
+                        return link_information;
+                    }
+                }
+                let password_box = match wait_for_element(&tab, "input[name='unlock']", None, None)
+                {
+                    Ok(password_box) => password_box,
+                    Err(error) => {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to find password box: {}",
+                            error
+                        )));
+                        return link_information;
+                    }
+                };
+                if let Err(error) = password_box.type_into(&password) {
+                    link_information.status = Err(LinkError::BrowserError(format!(
+                        "Failed to type password: {}",
+                        error
+                    )));
+                    return link_information;
+                };
+                
+                match tab.evaluate(
+                    "document.querySelector('#sub_form > button').click()",
+                    false,
+                ) {
+                    Ok(_) => {
+                        if let Ok(modal) = wait_for_element(&tab, ".swal-modal", Some(3), None) {
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        link_information.status = Err(LinkError::BrowserError(format!(
+                            "Failed to click unlock button: {}",
+                            error
+                        )));
+                        return link_information;
+                    }
+                }
+            }
+
+            if let Ok(modal) = tab.find_element(".swal-modal") {
+                if let Err(error) = tab.close(true) {
+                    link_information.status = Err(LinkError::BrowserError(format!(
+                        "Failed to close tab: {}",
+                        error
+                    )));
+                }
+                link_information.status =
+                    Err(LinkError::PasswordProtected("Wrong password".to_string()));
+                return link_information;
+            }
+        }
         if let Err(error) = Self::click_check_link_status(&tab) {
             link_information.status = Err(error);
             return link_information;
@@ -133,16 +216,17 @@ impl MirroredLink {
                 error
             )));
         };
+        if let Err(error) = tab.wait_until_navigated() {
+            return Err(LinkError::BrowserError(format!(
+                "Failed to navigate to file links: {}",
+                error
+            )));
+        };
         Ok(())
     }
 
     fn click_check_link_status(tab: &Arc<Tab>) -> Result<(), LinkError> {
-        wait_for_element(
-            tab,
-            "#result > div.col-sm > table > tbody > tr:nth-child(1) > td:nth-child(1)",
-            None,
-            None,
-        )?;
+        wait_for_element(tab, "#result > #done", None, None)?;
 
         let check_divs = tab
             .find_elements("td[data-label='Link Status'] > span > div:not(#linkstatus1000)")
@@ -411,7 +495,7 @@ mod tests {
             let browser = new_browser();
             let tab = match navigate_to_new_tab(&browser, url) {
                 Ok(tab) => tab,
-                Err(_) => panic!()
+                Err(_) => panic!(),
             };
             MirroredLink::navigate_to_file_links(&tab);
 
@@ -430,7 +514,7 @@ mod tests {
             let browser = new_browser();
             let tab = match navigate_to_new_tab(&browser, url) {
                 Ok(tab) => tab,
-                Err(_) => panic!("Failed to navigate to tab")
+                Err(_) => panic!("Failed to navigate to tab"),
             };
             MirroredLink::click_check_link_status(&tab);
             let statuses = tab

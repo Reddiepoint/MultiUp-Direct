@@ -66,7 +66,6 @@ impl MultiUpProjectLink {
             };
 
             for password in passwords {
-                println!("Trying password: {}", password);
                 let password_box = match tab.find_element("input[name='password'][type='password']") {
                     Ok(password_box) => password_box,
                     Err(error) => {
