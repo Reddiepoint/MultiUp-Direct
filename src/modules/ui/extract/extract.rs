@@ -513,14 +513,17 @@ impl ExtractUI {
             label.context_menu(|ui| {
                 if ui.button("Copy link").clicked() {
                     copy_to_clipboard(ui, link.to_string());
+                    ui.close_menu();
                 }
 
                 if !self.selected_links.is_empty() && ui.button("Copy selected links").clicked() {
                     self.copy_selected_links(ui);
+                    ui.close_menu();
                 }
 
                 if ui.button("Copy all links").clicked() {
                     self.copy_all_links(ui);
+                    ui.close_menu();
                 }
             });
         }
