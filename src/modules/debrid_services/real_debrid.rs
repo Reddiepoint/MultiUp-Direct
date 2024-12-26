@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 use crate::modules::debrid_services::links::{DebridError, DebridServiceLink};
 use crossbeam_channel::Sender;
 use reqwest::Client;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::thread;
-use reqwest::header::AUTHORIZATION;
 use tokio::runtime::Runtime;
 
 pub fn unlock_links(
@@ -25,8 +24,7 @@ pub fn unlock_links(
             for link in real_debrid_api_links {
                 let client = client.clone();
                 let task = tokio::spawn(async move {
-                    let result = link.unlock(&client, use_remote_traffic).await;
-                    result
+                    link.unlock(&client, use_remote_traffic).await
                 });
                 tasks.push(task);
             }

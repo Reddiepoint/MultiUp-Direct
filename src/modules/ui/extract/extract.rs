@@ -93,7 +93,6 @@ impl ExtractUI {
                 match self.links_information.is_empty() {
                     true => {
                         new_info_toast(&mut self.toasts, "No links extracted.", None, None);
-                        return;
                     }
                     false => new_success_toast(
                         &mut self.toasts,
@@ -660,7 +659,7 @@ impl ExtractUI {
         let links: Vec<String> = self
             .selected_links
             .iter()
-            .flat_map(|(id, links)| links)
+            .flat_map(|(_id, links)| links)
             .cloned()
             .collect();
         copy_to_clipboard(ui, links.join("\n"));
@@ -670,7 +669,7 @@ impl ExtractUI {
         let links: Vec<String> = self
             .direct_links
             .iter()
-            .flat_map(|(id, link)| link)
+            .flat_map(|(_id, link)| link)
             .cloned()
             .collect();
         copy_to_clipboard(ui, links.join("\n"));

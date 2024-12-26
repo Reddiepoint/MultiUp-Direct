@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::modules::hosting_services::links::LinkError;
 
-pub fn new_browser() -> Browser {
+pub fn new_browser() -> Result<Browser, LinkError> {
     let launch_options = LaunchOptionsBuilder::default()
         .headless(false)
         .sandbox(true)
@@ -17,11 +17,10 @@ pub fn new_browser() -> Browser {
         })
         .build()
         .unwrap();
-    let browser = match Browser::new(launch_options) {
-        Ok(browser) => browser,
-        Err(error) => panic!("An error occurred: {}", error),
-    };
-    browser
+    match Browser::new(launch_options) {
+        Ok(browser) => Ok(browser),
+        Err(error) => Err(LinkError::BrowserError(format!("Failed to start browser: {}", error)))?,
+    }
 }
 
 pub fn navigate_to_new_tab(
@@ -101,7 +100,7 @@ mod tests {
     #[ignore]
     fn test_navigate_to_new_tab() {
         let browser = new_browser();
-        let _tab = match navigate_to_new_tab(&browser, "https://google.com") {
+        let _tab = match navigate_to_new_tab(&browser.unwrap(), "https://google.com") {
             Ok(_) => {}
             Err(_) => panic!("Failed to navigate to tab"),
         };

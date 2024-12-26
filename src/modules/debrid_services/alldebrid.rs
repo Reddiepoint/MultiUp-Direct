@@ -22,8 +22,7 @@ pub fn unlock_links(
             for link in alldebrid_api_links {
                 let client = client.clone();
                 let task = tokio::spawn(async move {
-                    let result = link.unlock(&client).await;
-                    result
+                    link.unlock(&client).await
                 });
                 tasks.push(task);
             }

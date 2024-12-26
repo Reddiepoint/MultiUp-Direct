@@ -4,7 +4,6 @@ use eframe::{App, Frame};
 use crate::modules::ui::debrid::debrid::DebridUI;
 use crate::modules::ui::extract::extract::ExtractUI;
 use crate::modules::ui::help::HelpUI;
-use crate::modules::ui::upload::upload::UploadUI;
 
 pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
@@ -19,7 +18,6 @@ pub enum TabBar {
     #[default]
     Extract,
     Debrid,
-    Upload,
 }
 
 /// A struct representing the application UI.
@@ -30,7 +28,6 @@ pub struct MultiUpDirect {
     pub tab_bar: TabBar,
     extract_ui: ExtractUI,
     debrid_ui: DebridUI,
-    pub upload_ui: UploadUI,
     help_ui: HelpUI,
 }
 
@@ -96,7 +93,6 @@ impl MultiUpDirect {
             match &self.tab_bar {
                 TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
                 TabBar::Debrid => DebridUI::display(ctx, ui, &mut self.debrid_ui),
-                TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui),
             }
 
             /*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);

@@ -47,7 +47,7 @@ pub fn read_config() -> Result<Config, ConfigError> {
     match read_to_string("config.json") {
         Ok(config) => match serde_json::from_str(&config) {
             Ok(config) => Ok(config),
-            Err(error) => {
+            Err(_error) => {
                 if let Err(error) = write("config_original.json", config) {
                     eprintln!("Failed to save invalid config: {}", error);
                 };

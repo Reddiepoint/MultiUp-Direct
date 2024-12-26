@@ -45,7 +45,7 @@ pub struct HelpUI {
     latest_version: (Release, bool),
     updating: bool,
     updating_status: String,
-    pub link_to_latest_version: String,
+    // pub link_to_latest_version: String,
 }
 
 impl Default for HelpUI {
@@ -59,7 +59,7 @@ impl Default for HelpUI {
             latest_version: (Release::default(), false),
             updating: false,
             updating_status: String::new(),
-            link_to_latest_version: String::new(),
+            // link_to_latest_version: String::new(),
         }
     }
 }
@@ -107,7 +107,9 @@ impl HelpUI {
                 if ui.checkbox(&mut self.check_for_update_on_startup, "Check for updates on startup").clicked() {
                     let mut config = read_config().unwrap_or_default();
                     config.check_for_updates_on_startup = self.check_for_update_on_startup;
-                    save_config(&config);
+                    if let Err(error) = save_config(&config) {
+                        eprintln!("Failed to save config: {}", error.get_error_message());
+                    };
                 };
                 
                 ui.horizontal(|ui| {

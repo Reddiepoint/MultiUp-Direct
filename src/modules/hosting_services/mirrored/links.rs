@@ -124,7 +124,7 @@ impl HostingService for MirroredLink {
                     false,
                 ) {
                     Ok(_) => {
-                        if let Ok(modal) = wait_for_element(&tab, ".swal-modal", Some(3), None) {
+                        if let Ok(_modal) = wait_for_element(&tab, ".swal-modal", Some(3), None) {
                             continue;
                         } else {
                             break;
@@ -140,7 +140,7 @@ impl HostingService for MirroredLink {
                 }
             }
 
-            if let Ok(modal) = tab.find_element(".swal-modal") {
+            if let Ok(_modal) = tab.find_element(".swal-modal") {
                 if let Err(error) = tab.close(true) {
                     link_information.status = Err(LinkError::BrowserError(format!(
                         "Failed to close tab: {}",
@@ -492,12 +492,12 @@ mod tests {
 
         for i in 0..1 {
             println!("Iteration {}", i);
-            let browser = new_browser();
+            let browser = new_browser().unwrap();
             let tab = match navigate_to_new_tab(&browser, url) {
                 Ok(tab) => tab,
                 Err(_) => panic!(),
             };
-            MirroredLink::navigate_to_file_links(&tab);
+            MirroredLink::navigate_to_file_links(&tab).unwrap();
 
             assert!(wait_for_element(&tab, "#result", None, None).is_ok());
         }
@@ -511,12 +511,12 @@ mod tests {
             "https://www.mirrored.to/files/0KGTBMFK/?hash=b8ccdcb3cad258b2bb8dc7dc80a29477&dl=0";
         for i in 0..1 {
             println!("Iteration {}", i);
-            let browser = new_browser();
+            let browser = new_browser().unwrap();
             let tab = match navigate_to_new_tab(&browser, url) {
                 Ok(tab) => tab,
                 Err(_) => panic!("Failed to navigate to tab"),
             };
-            MirroredLink::click_check_link_status(&tab);
+            MirroredLink::click_check_link_status(&tab).unwrap();
             let statuses = tab
                 .find_elements("td[data-label='Link Status'] > span > div > div")
                 .unwrap();
@@ -535,7 +535,7 @@ mod tests {
                 id: "0KGTBMFK".to_string(),
             };
 
-            let browser = new_browser();
+            let browser = new_browser().unwrap();
             // let tab = navigate_to_new_tab(&browser, url);
             let link_information = mirrored_link.get_link_information(&browser, false);
             println!("{:?}", link_information);

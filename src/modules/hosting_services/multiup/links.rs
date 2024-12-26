@@ -54,7 +54,7 @@ impl MultiUpProjectLink {
 
 
         // Check for password
-        if let Ok(password_box) = tab.clone().find_element("input[name='password'][type='password']") {
+        if let Ok(_password_box) = tab.clone().find_element("input[name='password'][type='password']") {
             let passwords = match read_config() {
                 Ok(config) => config.hosting_passwords,
                 Err(error) => {
@@ -238,7 +238,7 @@ impl HostingService for MultiUpMirrorLink {
         "multiup.io"
     }
 
-    fn get_link_information(&self, browser: &Browser, recheck_validity: bool) -> LinkInformation {
+    fn get_link_information(&self, browser: &Browser, _recheck_validity: bool) -> LinkInformation {
         let mut link_information = LinkInformation::new(
             self.original_link.clone(),
             self.get_domain().to_string(),
@@ -271,7 +271,7 @@ impl HostingService for MultiUpMirrorLink {
         };
 
         // Check for password
-        if let Ok(password_box) = tab.clone().find_element("input[name='password'][type='password']") {
+        if let Ok(_password_box) = tab.clone().find_element("input[name='password'][type='password']") {
             let passwords = match read_config() {
                 Ok(config) => config.hosting_passwords,
                 Err(error) => {
@@ -420,19 +420,6 @@ impl HostingService for MultiUpMirrorLink {
             }
             return link_information;
         };
-        // if let Err(error) = tab.wait_for_element_with_custom_timeout(
-        //     "body > section > div > section > header > h2",
-        //     Duration::from_secs(10),
-        // ) {
-        //     let _ = tab.reload(false, None);
-        //     if let Err(error) = tab.wait_for_element_with_custom_timeout(
-        //         "body > section > div > section > header > h2",
-        //         Duration::from_secs(10),
-        //     ) {
-        //         eprintln!("Error waiting for element: {}", error);
-        //         panic!(); // TODO: Return error
-        //     }
-        // };
 
         let page_html = match tab.get_content() {
             Ok(html) => html,
@@ -636,7 +623,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_project_get_mirror_links() {
-        let browser = new_browser();
+        let browser = new_browser().unwrap();
         let project_link = MultiUpProjectLink::new(
             "https://multiup.io/en/project/170a7f224e7d146c7116dc377825a38c".to_owned(),
             "170a7f224e7d146c7116dc377825a38c".to_string(),
@@ -659,7 +646,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_invalid_mirror() {
-        let browser = new_browser();
+        let browser = new_browser().unwrap();
         let mirror_link = MultiUpMirrorLink::new(
             "https://multiup.io/en/mirror/84fdbaaa77da3e18106a3f788e1d8c21".to_owned(),
             "84fdbaaa77da3e18106a3f788e1d8c21".to_string(),
@@ -695,7 +682,7 @@ mod tests {
     #[ignore]
     fn test_grab_direct_links() {
         // Requires human interaction for Cloudflare
-        let browser = new_browser();
+        let browser = new_browser().unwrap();
 
         let tab = browser.new_tab().unwrap();
         tab.navigate_to("https://multiup.io/en/mirror/84fdbaaa77da3e18106a3f788e1d8c22")

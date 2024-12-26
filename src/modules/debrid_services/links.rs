@@ -1,6 +1,4 @@
 use regex::Regex;
-use std::fmt::Display;
-use crossbeam_channel::Sender;
 
 pub struct DebridServiceLink {
     pub link: String,

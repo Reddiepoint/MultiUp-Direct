@@ -1,8 +1,8 @@
-use std::time::Duration;
 use eframe::egui;
-use egui::{Align2, Context};
 use egui::Direction::TopDown;
+use egui::Align2;
 use egui_toast::{Toast, ToastKind, ToastOptions, Toasts};
+use std::time::Duration;
 
 pub fn new_toasts() -> Toasts {
     Toasts::new()
@@ -25,12 +25,13 @@ pub fn new_info_toast(toasts: &mut Toasts, message: &str, duration: Option<Optio
     new_toast(toasts, ToastKind::Info, message, duration, show_progress);
 }
 
-pub fn new_warning_toast(mut toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
+pub fn new_warning_toast(toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
     new_toast(toasts, ToastKind::Warning, message, duration, show_progress);
 }
-pub fn new_error_toast(mut toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
+
+pub fn new_error_toast(toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
     new_toast(toasts, ToastKind::Error, message, duration, show_progress);
 }
-pub fn new_success_toast(mut toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
+pub fn new_success_toast(toasts: &mut Toasts, message: &str, duration: Option<Option<Duration>>, show_progress: Option<bool>) {
     new_toast(toasts, ToastKind::Success, message, duration, show_progress);
 }

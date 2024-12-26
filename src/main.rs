@@ -1,11 +1,8 @@
 // #![windows_subsystem = "windows"]
 
-use std::path::PathBuf;
-
 use eframe::egui::ViewportBuilder;
 
-use crate::modules::app::{MultiUpDirect, TabBar, DOCUMENTATION};
-// use modules::ui::upload::upload::UploadType;
+use crate::modules::app::MultiUpDirect;
 
 mod modules;
 

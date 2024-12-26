@@ -73,7 +73,21 @@ async fn extract_download_links(
     if hosting_service_links.is_empty() {
         return Vec::new();
     }
-    let browser = new_browser();
+    let browser = match new_browser() {
+        Ok(browser) => browser,
+        Err(error) => {
+            return vec![LinkInformation::new(
+                "All links failed".to_string(),
+                String::new(),
+                String::new(),
+                String::new(),
+                0.0,
+                String::new(),
+                Vec::new(),
+                Err(error),
+            )];
+        }
+    };
     let max_concurrent_tabs = 20;
     let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
     let mut tasks = Vec::new();
@@ -87,7 +101,7 @@ async fn extract_download_links(
                     Err(error) => {
                         let original_link = project.original_link.clone();
                         let task = tokio::spawn(async move {
-                            let link_information = LinkInformation::new(
+                            LinkInformation::new(
                                 original_link,
                                 String::new(),
                                 String::new(),
@@ -96,8 +110,7 @@ async fn extract_download_links(
                                 String::new(),
                                 Vec::new(),
                                 Err(error),
-                            );
-                            link_information
+                            )
                         });
                         tasks.push(task);
                         continue;

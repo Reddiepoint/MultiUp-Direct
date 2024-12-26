@@ -1,4 +1,4 @@
-use crate::modules::hosting_services::links::{DirectLink, LinkInformation, DirectLinkValidity};
+use crate::modules::hosting_services::links::{DirectLinkValidity, LinkInformation};
 use std::collections::BTreeMap;
 
 pub fn get_info(links: &Vec<LinkInformation>) -> (u32, u32, u32, BTreeMap<String, u32>) {
@@ -21,7 +21,7 @@ pub fn get_info(links: &Vec<LinkInformation>) -> (u32, u32, u32, BTreeMap<String
                 .or_insert(1);
         }
     }
-    
+
     (valid, invalid, unknown, hosts)
 }
 
