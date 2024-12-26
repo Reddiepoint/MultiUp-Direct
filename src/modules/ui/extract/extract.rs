@@ -106,10 +106,10 @@ impl ExtractUI {
     }
 
     fn display_input_area(&mut self, ui: &mut Ui) {
-        ui.heading("Hosting Service Input Links");
+        ui.heading("Hosting Service Links");
 
         ScrollArea::both()
-            .id_salt("Hosting Service Input Links Box")
+            .id_salt("Hosting Service Links Box")
             .max_height(ui.available_height() / 4.0)
             .show(ui, |ui| {
                 ui.add(
