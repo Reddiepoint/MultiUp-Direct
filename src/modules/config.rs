@@ -1,3 +1,4 @@
+use std::fs::{read_to_string, write};
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 
@@ -43,11 +44,13 @@ impl ConfigError {
 }
 
 pub fn read_config() -> Result<Config, ConfigError> {
-    match std::fs::read_to_string("config.json") {
+    match read_to_string("config.json") {
         Ok(config) => match serde_json::from_str(&config) {
             Ok(config) => Ok(config),
             Err(error) => {
-                eprintln!("Error reading config: {}", error);
+                if let Err(error) = write("config_original.json", config) {
+                    eprintln!("Failed to save invalid config: {}", error);
+                };
                 Err(ConfigError::InvalidJson)
             }
         },
@@ -60,7 +63,7 @@ pub fn read_config() -> Result<Config, ConfigError> {
 
 pub fn save_config(config: &Config) -> Result<(), ConfigError> {
     let json = serde_json::to_string_pretty(config).unwrap();
-    if let Err(error) = std::fs::write("config.json", json) {
+    if let Err(error) = write("config.json", json) {
         return Err(ConfigError::Unknown(error.to_string()));
     };
     Ok(())
