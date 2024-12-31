@@ -88,7 +88,7 @@ async fn extract_download_links(
             )];
         }
     };
-    let max_concurrent_tabs = 20;
+    let max_concurrent_tabs = 15;
     let semaphore = Arc::new(Semaphore::new(max_concurrent_tabs));
     let mut tasks = Vec::new();
     // let client = Client::new();
