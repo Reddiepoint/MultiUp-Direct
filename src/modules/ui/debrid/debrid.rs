@@ -1,3 +1,4 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::modules::config;
 use crate::modules::config::{Config, ConfigError};
 use crate::modules::debrid_services::links::DebridServiceLink;
@@ -7,6 +8,7 @@ use crossbeam_channel::Receiver;
 use eframe::egui::{Button, ComboBox, Context, ScrollArea, TextEdit, TopBottomPanel, Ui, Window};
 use egui_extras::{Column, TableBuilder};
 use egui_toast::Toasts;
+use crate::modules::general::save_to_file;
 
 pub struct DebridUI {
     toasts: Toasts,
@@ -313,6 +315,24 @@ impl DebridUI {
                     new_success_toast(&mut self.toasts, "Copied links to clipboard.", None, None);
                 }
             });
+            
+            if ui.button("Save as TXT").clicked() {
+                if debrid_links.is_empty() {
+                    return;
+                }
+
+                let current_time = SystemTime::now();
+                let time_stamp = current_time
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs();
+                let text_file_name = format!("debrid_links_{}.txt", time_stamp);
+                if let Err(error) = save_to_file(&text_file_name, &debrid_links) {
+                    new_error_toast(&mut self.toasts, error.as_str(), None, None);
+                    return;
+                };
+                new_info_toast(&mut self.toasts, "Saved links to file.", None, None);
+            }
         });
 
         ScrollArea::both()
