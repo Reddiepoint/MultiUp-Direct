@@ -1,16 +1,16 @@
+use eframe::egui::{menu, CentralPanel, Context, TopBottomPanel, Ui};
 use eframe::{App, Frame};
-use eframe::egui::{CentralPanel, Context, menu, TopBottomPanel, Ui};
-use crate::modules::extract::ExtractUI;
-use crate::modules::debrid::DebridUI;
-use crate::modules::upload::UploadUI;
-use crate::modules::help::HelpUI;
 
+use crate::modules::ui::debrid::debrid::DebridUI;
+use crate::modules::ui::extract::extract::ExtractUI;
+use crate::modules::ui::help::HelpUI;
 
 pub const HOMEPAGE: &str = "https://cs.rin.ru/forum/viewtopic.php?f=14&p=2822500#p2822500";
 
-pub const DOCUMENTATION: &str = "https://reddiepoint.github.io/RedAlt-SteamUp-Documentation/using-the-creator.html";
+pub const GITHUB: &str = "https://github.com/Reddiepoint/MultiUp-Direct/";
 
-
+pub const DOCUMENTATION: &str =
+    "https://reddiepoint.github.io/MultiUp-Direct-Documentation/";
 
 /// Represents a bar containing tabs for each function.
 #[derive(Default, PartialEq)]
@@ -18,18 +18,16 @@ pub enum TabBar {
     #[default]
     Extract,
     Debrid,
-    Upload
 }
 
 /// A struct representing the application UI.
-/// 
+///
 /// Stores the state of each tab.
 #[derive(Default)]
 pub struct MultiUpDirect {
     pub tab_bar: TabBar,
     extract_ui: ExtractUI,
     debrid_ui: DebridUI,
-    pub upload_ui: UploadUI,
     help_ui: HelpUI,
 }
 
@@ -41,6 +39,11 @@ impl App for MultiUpDirect {
 }
 
 impl MultiUpDirect {
+    /// Creates a new `MultiUpDirect` app.
+    pub fn new(_cc: &eframe::CreationContext) -> Self {
+        Self::default()
+    }
+
     /// Displays the top bar.
     ///
     /// This method is responsible for rendering the top bar of the application, which includes
@@ -51,11 +54,10 @@ impl MultiUpDirect {
                 // Add tabs for each function
                 ui.selectable_value(&mut self.tab_bar, TabBar::Extract, "Extract");
                 ui.selectable_value(&mut self.tab_bar, TabBar::Debrid, "Debrid");
-                ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
+                // ui.selectable_value(&mut self.tab_bar, TabBar::Upload, "Upload");
 
                 // Menu bar/toolbar elements
                 self.menu_bar(ui);
-
             });
         });
     }
@@ -78,12 +80,10 @@ impl MultiUpDirect {
                     ui.close_menu();
                 }
 
-
                 ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
             })
         });
     }
-
 
     /// Displays the central panel in the user interface based on the selected tab.
     ///
@@ -93,16 +93,14 @@ impl MultiUpDirect {
             match &self.tab_bar {
                 TabBar::Extract => ExtractUI::display(ctx, ui, &mut self.extract_ui),
                 TabBar::Debrid => DebridUI::display(ctx, ui, &mut self.debrid_ui),
-                TabBar::Upload => UploadUI::display(ctx, ui, &mut self.upload_ui)
             }
 
-            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
-            DebridUI::display_error_log(&mut self.debrid_ui, ctx);
+            /*            ExtractUI::display_error_log(&mut self.extract_ui, ctx);
+                        DebridUI::display_error_log(&mut self.debrid_ui, ctx);
+
+             */
             self.help_ui.show_help_window(ctx);
             self.help_ui.show_update_window(ctx);
         });
     }
 }
-
-
-
