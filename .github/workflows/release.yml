@@ -7,39 +7,83 @@ on:
       - '*v*'
 
 jobs:
-  release:
-    name: Release ${{ matrix.target}}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-pc-windows-gnu
-            os: windows-latest
-            archive_name: MultiUp-Direct.zip
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            archive_name: MultiUp-Direct_amd64.zip
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            archive_name: MultiUp-Direct_darwin.zip
+  build-win:
+    runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@master
-#      - name: Install Rust
-#        uses: dtolnay/rust-toolchain@stable
-#        with:
-#          targets: ${{ matrix.target }}
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install latest rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build
-        uses: rust-build/rust-build.action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          TOOLCHAIN_VERSION: stable
-          RUSTTARGET: ${{ matrix.target }}
+        run: cargo build --all --release
+
+      - name: Install 7zip
+        run: choco install 7zip
+
+      - name: Zip executable
+        run: |
+          cd target/release
+          7z a -mx9 MultiUp-Direct.zip MultiUp-Direct.exe
+
       - name: Release
         uses: softprops/action-gh-release@master
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: target/release/${{ matrix.archive_name }}
+          files: target/release/MultiUp-Direct.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install latest rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --all --release && strip target/release/MultiUp-Direct && mv target/release/MultiUp-Direct target/release/MultiUp-Direct_amd64
+
+      - name: Zip executable
+        run: |
+          cd target/release
+          zip -9 MultiUp-Direct_amd64.zip MultiUp-Direct_amd64
+
+      - name: Release
+        uses: softprops/action-gh-release@master
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: target/release/MultiUp-Direct_amd64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Install latest rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build for mac
+        run: cargo build --all --release && strip target/release/MultiUp-Direct && mv target/release/MultiUp-Direct target/release/MultiUp-Direct_darwin
+
+      - name: Zip executable
+        run: |
+          cd target/release
+          zip -9 MultiUp-Direct_darwin.zip MultiUp-Direct_darwin
+
+      - name: Release
+        uses: softprops/action-gh-release@master
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: target/release/MultiUp-Direct_darwin.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
