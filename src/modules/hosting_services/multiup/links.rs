@@ -265,7 +265,7 @@ impl HostingService for MultiUpMirrorLink {
                 return link_information;
             }
         };
-        if let Err(error) = wait_for_element(&tab, "h2", Some(30), Some(5)) {
+        if let Err(error) = wait_for_element(&tab, "a > img", Some(30), Some(5)) {
             link_information.status = Err(error);
             return link_information;
         };
